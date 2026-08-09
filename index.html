@@ -136,6 +136,28 @@ a.fold:hover{background:var(--panel2)}
 .blk.other .who{color:var(--dim)}
 .readerbar{display:flex;gap:8px;align-items:center}
 .readerbar select{width:auto;padding:6px 8px;font-size:13px}
+/* ---- 기록 내 검색 ---- */
+.docsearch{display:flex;gap:8px;margin:16px auto 0;max-width:720px;flex-wrap:wrap;
+  font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+.docsearch form{display:flex;gap:6px;align-items:center;margin:0}
+.docsearch form.qsf{flex:1 1 220px}
+.docsearch input{padding:7px 10px;font-size:13.5px}
+.docsearch #ts-no{width:104px}
+.docsearch #qs-q{flex:1;width:auto;min-width:120px}
+.ts-msg{max-width:720px;margin:7px auto 0;font-size:12.5px;color:var(--danger);
+  font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+.ts-msg:empty{display:none}
+mark.hl{background:color-mix(in srgb,var(--gold) 26%,transparent);color:inherit;
+  border-bottom:1px solid var(--gold);border-radius:2px;padding:0 1px}
+mark.hl.cur{background:var(--gold);color:var(--primary-ink)}
+.findbar{position:fixed;left:0;right:0;bottom:0;z-index:20;border-top:1px solid var(--line);
+  background:color-mix(in srgb,var(--panel) 90%,transparent);backdrop-filter:blur(10px)}
+.findbar-in{max-width:860px;margin:0 auto;padding:9px 18px;display:flex;gap:8px;align-items:center;
+  font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:13px;color:var(--dim)}
+.findbar-in b{color:var(--gold-soft);font-weight:600;max-width:34%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.findbar-in .pos{white-space:nowrap}
+.findbar-in .fsp{flex:1}
 .pagenav{display:flex;justify-content:space-between;align-items:center;gap:10px;
   margin:20px 0 6px;font-size:12.5px;color:var(--dim);
   font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
@@ -1366,6 +1388,55 @@ function pageList(params) {
   });
 }
 
+/* ---------------- 기록 내 검색 도우미 ---------------- */
+function turnTextOf(t) {
+  var parts = [];
+  t.blocks.forEach(function (b) {
+    if (b.speaker) parts.push(b.speaker);
+    b.paras.forEach(function (p) { parts.push(p); });
+  });
+  return parts.join("\n");
+}
+
+/* 현재 페이지에 그려진 턴 단위(구분선 + 블록들)를 순서대로 수집 */
+function collectTurnGroups() {
+  var reader = document.querySelector(".reader");
+  var groups = [], cur = null;
+  if (!reader) return groups;
+  Array.prototype.forEach.call(reader.children, function (el) {
+    if (el.classList.contains("turn-mark")) { cur = { mark: el, blocks: [] }; groups.push(cur); }
+    else if (cur && el.classList.contains("blk")) cur.blocks.push(el);
+  });
+  return groups;
+}
+
+/* 텍스트 노드를 훑으며 일치 부분을 <mark class="hl">로 감싼다 (대소문자 무시) */
+function highlightMatches(rootEl, q, isCur) {
+  var lq = q.toLowerCase();
+  var walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, null);
+  var nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(function (node) {
+    var text = node.nodeValue;
+    var lower = text.toLowerCase();
+    var idx = lower.indexOf(lq);
+    if (idx < 0) return;
+    var frag = document.createDocumentFragment();
+    var pos = 0;
+    while (idx >= 0) {
+      if (idx > pos) frag.appendChild(document.createTextNode(text.slice(pos, idx)));
+      var mk = document.createElement("mark");
+      mk.className = isCur ? "hl cur" : "hl";
+      mk.textContent = text.slice(idx, idx + q.length);
+      frag.appendChild(mk);
+      pos = idx + q.length;
+      idx = lower.indexOf(lq, pos);
+    }
+    if (pos < text.length) frag.appendChild(document.createTextNode(text.slice(pos)));
+    node.parentNode.replaceChild(frag, node);
+  });
+}
+
 /* ---------------- 페이지: 읽기 ---------------- */
 function pageView(params) {
   var id = params.get("id") || "";
@@ -1390,13 +1461,33 @@ function pageView(params) {
   p = Math.min(Math.max(p, 1), pages);
   var chunk = turns.slice((p - 1) * PAGE_TURNS, p * PAGE_TURNS);
 
+  /* 기록 내 텍스트 검색 상태 (URL: q=검색어, qi=몇 번째 일치 턴) */
+  var q = (params.get("q") || "").trim();
+  var qi = parseInt(params.get("qi") || "0", 10);
+  if (isNaN(qi) || qi < 0) qi = 0;
+  var hitTurns = [], hitTotal = 0;
+  if (q) {
+    var lq = q.toLowerCase();
+    turns.forEach(function (t, i) {
+      var n = C.countOcc(turnTextOf(t).toLowerCase(), lq);
+      if (n > 0) { hitTurns.push(i); hitTotal += n; }
+    });
+    if (qi > hitTurns.length) qi = hitTurns.length;
+  }
+  var keepQ = q ? "&q=" + encodeURIComponent(q) + (qi ? "&qi=" + qi : "") : "";
+
   function turnLabel(t) { return t.no !== null ? t.no + "턴" : (t.label || "기록"); }
+  function hitUrl(k) {
+    var gi = hitTurns[k - 1];
+    var pg = Math.floor(gi / PAGE_TURNS) + 1;
+    return "/view?id=" + qid + "&p=" + pg + "&q=" + encodeURIComponent(q) + "&qi=" + k;
+  }
 
   var opts = [];
   turns.forEach(function (t, i) {
     if (t.no === null) return;
     var pg = Math.floor(i / PAGE_TURNS) + 1;
-    var url = "#/view?id=" + qid + "&p=" + pg + "&t=" + t.no;
+    var url = "#/view?id=" + qid + "&p=" + pg + "&t=" + t.no + keepQ;
     opts.push('<option value="' + url + '">' + t.no + "턴</option>");
   });
   var turnSel = opts.length
@@ -1415,20 +1506,51 @@ function pageView(params) {
   var navHtml = "";
   if (pages > 1) {
     var rng = chunk.length ? (turnLabel(chunk[0]) + "~" + turnLabel(chunk[chunk.length - 1])) : "";
-    var prevA = p > 1 ? '<a class="btn small" href="#/view?id=' + qid + "&p=" + (p - 1) + '">← 이전</a>' : "<span></span>";
-    var nextA = p < pages ? '<a class="btn small" href="#/view?id=' + qid + "&p=" + (p + 1) + '">다음 →</a>' : "<span></span>";
+    var prevA = p > 1 ? '<a class="btn small" href="#/view?id=' + qid + "&p=" + (p - 1) + keepQ + '">← 이전</a>' : "<span></span>";
+    var nextA = p < pages ? '<a class="btn small" href="#/view?id=' + qid + "&p=" + (p + 1) + keepQ + '">다음 →</a>' : "<span></span>";
     navHtml = '<div class="pagenav">' + prevA +
       "<span>" + rng + " · " + p + "/" + pages + "쪽 · 총 " + total + "턴</span>" + nextA + "</div>";
+  }
+
+  /* 검색줄: 턴 번호 이동 + 이 기록 안에서 텍스트 검색 */
+  var tsForm = d.turn_min !== null
+    ? '<form id="ts-form"><input id="ts-no" type="text" inputmode="numeric" autocomplete="off" placeholder="턴 번호">' +
+      '<button class="btn small" type="submit">턴 이동</button></form>'
+    : "";
+  var searchHtml =
+    '<div class="docsearch">' + tsForm +
+    '<form class="qsf" id="qs-form"><input id="qs-q" type="text" autocomplete="off" placeholder="이 기록에서 검색">' +
+    '<button class="btn small" type="submit">찾기</button></form></div>' +
+    '<div class="ts-msg" id="ts-msg"></div>';
+
+  /* 검색 중일 때 하단 찾기바 */
+  var findHtml = "";
+  if (q) {
+    var posTxt = hitTurns.length
+      ? (qi ? qi + "/" : "") + hitTurns.length + "턴 · " + hitTotal + "회"
+      : "일치 없음";
+    findHtml = '<div class="findbar"><div class="findbar-in">' +
+      "<b>“" + esc(q) + "”</b>" +
+      '<span class="pos">' + posTxt + "</span>" +
+      '<span class="fsp"></span>' +
+      (hitTurns.length
+        ? '<button class="btn small" id="f-prev" title="이전 일치 턴">↑</button>' +
+          '<button class="btn small" id="f-next" title="다음 일치 턴">↓</button>'
+        : "") +
+      '<button class="btn small" id="f-clear" title="검색 닫기">✕</button>' +
+      "</div></div>";
   }
 
   var body =
     '<div class="reader-head"><h1>' + esc(title) + "</h1>" +
     '<div class="meta">' + foldHtml + C.metaLine(meta, d) + "</div></div>" +
+    searchHtml +
     '<div class="reader">' + navHtml +
     C.renderTurns(chunk, persona, character) +
     navHtml +
     '<hr class="endmark">' +
-    '<p class="backline"><a class="btn small" href="#/">← 서재로</a></p></div>';
+    '<p class="backline"><a class="btn small" href="#/">← 서재로</a></p></div>' +
+    findHtml;
   layout(title, body, top);
 
   var jump = $("jump");
@@ -1437,10 +1559,77 @@ function pageView(params) {
     downloadText(id.split("/").pop() + ".md", d.raw);
   });
 
+  /* 턴 번호로 이동 */
+  var tsF = $("ts-form");
+  if (tsF) {
+    tsF.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var v = $("ts-no").value.trim();
+      if (!v) return;
+      var no = parseInt(v, 10);
+      var gi = -1;
+      if (!isNaN(no)) turns.some(function (t, i) { if (t.no === no) { gi = i; return true; } return false; });
+      if (gi < 0) {
+        var rng = d.turn_max !== d.turn_min ? d.turn_min + "~" + d.turn_max : String(d.turn_min);
+        $("ts-msg").textContent = v + "턴은 이 기록에 없어요 (" + rng + "턴 범위)";
+        return;
+      }
+      go("/view?id=" + qid + "&p=" + (Math.floor(gi / PAGE_TURNS) + 1) + "&t=" + no + keepQ);
+    });
+    $("ts-no").addEventListener("input", function () { $("ts-msg").textContent = ""; });
+  }
+
+  /* 이 기록 안에서 텍스트 검색 */
+  $("qs-form").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var v = $("qs-q").value.trim();
+    if (!v) { if (q) go("/view?id=" + qid + "&p=" + p); return; }
+    if (v === q) {
+      /* 같은 검색어로 다시 찾기 → 다음 일치 턴으로 */
+      if (hitTurns.length) go(hitUrl((qi % hitTurns.length) + 1));
+      else $("ts-msg").textContent = "“" + v + "” — 이 기록에서 찾지 못했어요";
+      return;
+    }
+    var lv = v.toLowerCase(), first = -1;
+    turns.some(function (t, i) {
+      if (turnTextOf(t).toLowerCase().indexOf(lv) >= 0) { first = i; return true; }
+      return false;
+    });
+    if (first < 0) { go("/view?id=" + qid + "&p=" + p + "&q=" + encodeURIComponent(v)); return; }
+    go("/view?id=" + qid + "&p=" + (Math.floor(first / PAGE_TURNS) + 1) +
+      "&q=" + encodeURIComponent(v) + "&qi=1");
+  });
+  $("qs-q").addEventListener("input", function () { $("ts-msg").textContent = ""; });
+
+  if (q) {
+    $("qs-q").value = q;
+    var N = hitTurns.length;
+    var fp = $("f-prev"), fn = $("f-next"), fc = $("f-clear");
+    if (fp) fp.addEventListener("click", function () { go(hitUrl(((qi - 2 + N) % N) + 1)); });
+    if (fn) fn.addEventListener("click", function () { go(hitUrl((qi % N) + 1)); });
+    if (fc) fc.addEventListener("click", function () { go("/view?id=" + qid + "&p=" + p); });
+  }
+
+  /* 일치 부분 하이라이트 (현재 페이지) */
+  var groups = null, curLocal = -1;
+  if (q && hitTurns.length) {
+    groups = collectTurnGroups();
+    if (qi) curLocal = hitTurns[qi - 1] - (p - 1) * PAGE_TURNS;
+    groups.forEach(function (g, li) {
+      var isCur = li === curLocal;
+      g.blocks.forEach(function (blk) { highlightMatches(blk, q, isCur); });
+    });
+  }
+
+  /* 스크롤: 턴 앵커 우선, 없으면 현재 일치 턴으로 */
   var t = params.get("t");
+  var scrolled = false;
   if (t) {
     var el = document.getElementById("t" + t);
-    if (el) el.scrollIntoView();
+    if (el) { el.scrollIntoView(); scrolled = true; }
+  }
+  if (!scrolled && groups && curLocal >= 0 && curLocal < groups.length) {
+    groups[curLocal].mark.scrollIntoView();
   }
 }
 
