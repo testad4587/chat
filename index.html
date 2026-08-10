@@ -987,6 +987,13 @@ function onProgress() {
   if (el && S.progress) el.textContent = "파일 " + S.progress.done + "/" + S.progress.total + " 내려받는 중…";
 }
 
+/* 입력 폼이 화면에 떠 있는지 (새 기록/이어붙이기: #caps, 통짜: #text, 편집: #raw) */
+function formIsOpen() {
+  return !!(document.getElementById("caps") ||
+            document.getElementById("text") ||
+            document.getElementById("raw"));
+}
+
 function syncIndex(force) {
   if (S.syncing) return S.syncP;
   if (!force && S.lastSync && (Date.now() - S.lastSync < 60000)) return Promise.resolve();
@@ -1083,6 +1090,9 @@ function syncIndex(force) {
   }).finally(function () {
     S.syncing = false;
     S.progress = null;
+    // 사용자가 입력 중인 폼(새 기록/이어붙이기/편집)이 열려 있으면 다시 그리지 않는다.
+    // 다시 그리면 innerHTML이 통째로 갈리면서 방금 붙여넣은 내용이 날아간다.
+    if (formIsOpen()) return;
     render();
   });
   return S.syncP;
@@ -1235,11 +1245,16 @@ function qs(obj) {
   return s ? "?" + s : "";
 }
 
+var LAST_LAYOUT_HASH = null;
 function layout(title, bodyHtml, topExtra) {
   document.title = title + " · " + APP_NAME;
   $("topbar-extra").innerHTML = topExtra || "";
   $("app").innerHTML = bodyHtml;
-  window.scrollTo(0, 0);
+  // 같은 화면을 다시 그리는 경우(백그라운드 동기화 등)에는 스크롤을 건드리지 않는다
+  if (LAST_LAYOUT_HASH !== location.hash) {
+    window.scrollTo(0, 0);
+    LAST_LAYOUT_HASH = location.hash;
+  }
 }
 
 function loadingScreen() {
@@ -1738,11 +1753,26 @@ function pageNew(params) {
     e.target.closest(".cap").remove();
     if (!document.querySelector("#caps .cap")) addCap(startNo);
   });
+  /* 자동 높이 조절.
+     height="auto"로 잠깐 접히는 순간 문서 전체 높이가 줄어서 브라우저가 스크롤을
+     위로 끌어올려 버린다(= 붙여넣기할 때 화면이 맨 위로 튐).
+     그래서 접기 전 스크롤 위치를 기억했다가 같은 프레임 안에서 되돌린다. */
+  function autoGrow(ta) {
+    var x = window.pageXOffset, y = window.pageYOffset;
+    ta.style.height = "auto";
+    // box-sizing:border-box라서 테두리 두께만큼 더해줘야 글자가 안 잘린다
+    var extra = ta.offsetHeight - ta.clientHeight;
+    ta.style.height = (ta.scrollHeight + extra) + "px";
+    if (window.pageYOffset !== y || window.pageXOffset !== x) window.scrollTo(x, y);
+  }
   $("caps").addEventListener("input", function (e) {
-    if (e.target.tagName === "TEXTAREA") {
-      e.target.style.height = "auto";
-      e.target.style.height = e.target.scrollHeight + "px";
-    }
+    if (e.target.tagName === "TEXTAREA") autoGrow(e.target);
+  });
+  // 붙여넣기 직후 한 번 더(일부 브라우저는 input 시점 높이 계산이 어긋남)
+  $("caps").addEventListener("paste", function (e) {
+    if (e.target.tagName !== "TEXTAREA") return;
+    var ta = e.target;
+    setTimeout(function () { autoGrow(ta); }, 0);
   });
   addCap(startNo);
 
