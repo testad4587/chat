@@ -261,6 +261,57 @@ hr.endmark{border:none;height:1px;margin:60px auto 0;max-width:200px;
 .doc-del[disabled]{opacity:.55;cursor:default;color:var(--faint);border-color:transparent;background:none}
 .docrow.sub .doc-del{top:7px;right:10px}
 
+/* ---- 갤러리 (이미지 전용 저장소) ---- */
+.gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:14px 0 6px}
+@media(max-width:640px){.gal-grid{grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:7px}}
+.gal-item{position:relative;aspect-ratio:3/4;background:var(--panel2);border:1px solid var(--line);
+  border-radius:10px;overflow:hidden;cursor:pointer;display:block}
+.gal-item:hover{border-color:var(--gold-dim)}
+.gal-item img,.gcover img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .25s}
+.gal-item img.ready,.gcover img.ready{opacity:1}
+.gal-item .gname{position:absolute;left:0;right:0;bottom:0;padding:18px 8px 6px;font-size:11px;line-height:1.3;
+  color:#f3ecdf;background:linear-gradient(transparent,rgba(0,0,0,.62));white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;pointer-events:none;font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+.gerr{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11.5px;
+  color:var(--danger);padding:8px;text-align:center;background:var(--panel2)}
+.folder.gal{padding:0;display:flex;flex-direction:column}
+.folder.gal .gcover{aspect-ratio:4/3;background:var(--panel2);overflow:hidden;position:relative;border-bottom:1px solid var(--line)}
+.folder.gal .fname{padding:10px 14px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.folder.gal .fname .n{color:var(--faint);font-weight:400;font-size:12px;margin-left:6px}
+.folder.gal .fmeta{padding:0 14px 12px}
+.gal-up{margin-top:22px}
+.gal-up .drop{padding:22px 16px;margin-bottom:6px}
+.gal-up .drop b{font-size:14px}
+.gal-up .drop span{font-size:12.5px}
+.gal-up .drop[aria-disabled="true"]{opacity:.55;cursor:default}
+.gal-summary{font-size:12.5px;color:var(--faint);margin:0 0 4px;line-height:1.7}
+.gal-summary b{color:var(--gold-soft);font-weight:600}
+.gal-summary.err{color:var(--danger)}
+/* 라이트박스 */
+.lb{position:fixed;inset:0;z-index:60;background:rgba(9,7,15,.94);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:12px;
+  font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;-webkit-user-select:none;user-select:none}
+.lb-stage{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;position:relative}
+.lb-stage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;
+  box-shadow:0 10px 44px rgba(0,0,0,.55);opacity:.35;transition:opacity .2s}
+.lb-stage img.ready{opacity:1}
+.lb-stage img:not([src]){display:none}
+.lb-load{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:13px;color:#d8d0e6;
+  background:rgba(20,16,32,.85);border:1px solid var(--line2);border-radius:8px;padding:6px 12px;max-width:80vw;text-align:center}
+.lb-x{position:absolute;top:10px;right:10px;z-index:2;border:1px solid var(--line2);background:rgba(30,26,44,.8);
+  color:#e9e2d4;border-radius:8px;width:38px;height:38px;font-size:18px;cursor:pointer}
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:2;border:1px solid var(--line2);
+  background:rgba(30,26,44,.8);color:#e9e2d4;border-radius:10px;width:42px;height:60px;font-size:28px;line-height:1;cursor:pointer}
+.lb-nav:hover,.lb-x:hover{border-color:var(--gold-dim);color:var(--gold-soft)}
+.lb-nav.prev{left:10px}.lb-nav.next{right:10px}
+.lb-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;width:100%;max-width:860px;
+  padding:10px 4px 2px;color:#a89fbb;font-size:12.5px}
+.lb-bar b{color:#e3ce9f;font-weight:600;max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-bar .fsp{flex:1}
+.lb-bar .btn{background:rgba(30,26,44,.8);color:#e9e2d4}
+.lb-bar .btn.danger{color:#d98a8a}
+@media(max-width:640px){.lb-nav{width:34px;height:52px;font-size:24px}.lb-bar{font-size:12px;gap:8px}.lb-bar b{max-width:70vw}}
+
 </style>
 </head>
 <body>
@@ -1467,7 +1518,7 @@ async function gh(pathname, opts) {
   opts = opts || {};
   var cfg = getCfg();
   var headers = {
-    "Authorization": "Bearer " + cfg.token,
+    "Authorization": "Bearer " + (opts.token || cfg.token),
     "Accept": "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
   };
@@ -1510,7 +1561,9 @@ function formIsOpen() {
   return !!(document.getElementById("caps") ||
             document.getElementById("text") ||
             document.getElementById("raw") ||
-            document.getElementById("imp-drop"));
+            document.getElementById("imp-drop") ||
+            document.getElementById("lb") ||
+            (typeof G !== "undefined" && G.busy));
 }
 
 function syncIndex(force) {
@@ -2107,6 +2160,7 @@ function pageList(params) {
   var top =
     '<button class="btn small" id="btn-sync" title="GitHub와 동기화"' + (S.syncing ? " disabled" : "") + ">" + (S.syncing ? "…" : "↻") + "</button>" +
     '<button class="btn small" id="btn-backup" title="모든 기록을 zip으로 저장">전체 백업</button>' +
+    '<a class="btn small" href="#/gallery" title="캐릭터 이미지 갤러리">갤러리</a>' +
     '<a class="btn small" href="' + impHref + '" title="txt 내보내기 파일을 올려 자동으로 저장">파일 백업</a>' +
     '<a class="btn primary small" href="' + newHref + '">＋ 새 기록</a>' +
     '<a class="btn small" href="#/settings" title="설정">⚙</a>';
@@ -3206,6 +3260,17 @@ function pageSettings(firstRun) {
     '<input type="password" id="cfg-token" value="' + esc(cfg.token || "") + '" placeholder="github_pat_…" autocomplete="off"></div>' +
     '<div class="field" style="max-width:320px"><label>브랜치 (선택 — 비우면 기본 브랜치)</label>' +
     '<input type="text" id="cfg-branch" value="' + esc(cfg.branch || "") + '" placeholder="main" autocapitalize="off" spellcheck="false"></div>' +
+    '<h2 style="margin-top:26px">이미지 저장소 (선택)</h2>' +
+    '<div class="notice">캐릭터 이미지는 텍스트와 <b>다른 저장소</b>에 따로 둡니다. 비공개 저장소를 하나 더 만들고 이름만 적으면 <b>갤러리</b>가 열려요. ' +
+    "저장소 안에서 <b>폴더 = 캐릭터</b>로 나누면 갤러리에서 폴더별로 모아 봅니다.</div>" +
+    '<div class="field"><label>이미지 저장소 (아이디/저장소이름)</label>' +
+    '<input type="text" id="cfg-irepo" value="' + esc(cfg.imgRepo || "") + '" placeholder="예: myid/chat-archive-images" autocapitalize="off" autocomplete="off" spellcheck="false"></div>' +
+    '<div class="grid2">' +
+    '<div class="field"><label>이미지 저장소 토큰 (선택 — 비우면 위 토큰을 같이 씀)</label>' +
+    '<input type="password" id="cfg-itoken" value="' + esc(cfg.imgToken || "") + '" placeholder="github_pat_…" autocomplete="off"></div>' +
+    '<div class="field"><label>브랜치 (선택)</label>' +
+    '<input type="text" id="cfg-ibranch" value="' + esc(cfg.imgBranch || "") + '" placeholder="main" autocapitalize="off" spellcheck="false"></div></div>' +
+    '<div class="hint">위 토큰을 같이 쓰려면 그 토큰의 <b>Repository access</b>에 이미지 저장소도 추가돼 있어야 해요 (Contents 읽기·쓰기).</div>' +
     '<div class="actions">' +
     '<button class="btn" id="btn-test">연결 테스트</button>' +
     '<button class="btn primary" id="btn-save">저장</button>' +
@@ -3217,7 +3282,9 @@ function pageSettings(firstRun) {
     "· 토큰은 <b>이 기기의 브라우저에만</b> 저장되고, GitHub API 호출에만 쓰여요. 다른 곳으로 전송되지 않습니다.<br>" +
     "· 공용 PC에서는 저장하지 말고, 사용 후 <b>로그아웃</b>을 눌러 주세요.<br>" +
     "· 기록은 전부 <code>비공개 데이터 저장소</code>의 <code>data/</code> 폴더에 md 파일로 저장돼요. " +
-    "기존 로컬(파이썬) 버전의 data 폴더를 그대로 올리면 이어서 쓸 수 있습니다.</div></div>";
+    "기존 로컬(파이썬) 버전의 data 폴더를 그대로 올리면 이어서 쓸 수 있습니다.<br>" +
+    "· 이미지는 <code>이미지 저장소</code>에 <code>캐릭터이름/파일.webp</code> 식으로 두면 갤러리에서 폴더별로 모아 봐요. " +
+    "한 번 본 이미지는 이 기기의 브라우저 캐시에 남아서 다시 내려받지 않습니다.</div></div>";
 
   layout("설정", body, cfgOk(cfg) ? '<a class="btn small" href="#/">서재로</a>' : "");
 
@@ -3226,34 +3293,48 @@ function pageSettings(firstRun) {
       repo: $("cfg-repo").value.trim(),
       token: $("cfg-token").value.trim(),
       branch: $("cfg-branch").value.trim(),
+      imgRepo: $("cfg-irepo").value.trim(),
+      imgToken: $("cfg-itoken").value.trim(),
+      imgBranch: $("cfg-ibranch").value.trim(),
     };
+  }
+
+  async function testRepo(repo, token, what) {
+    var res = await fetch(API + "/repos/" + repo, {
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) {
+      var err = new Error((data && data.message) || ("HTTP " + res.status));
+      err.status = res.status;
+      throw err;
+    }
+    return what + " 연결 성공 — " + data.full_name +
+      " · " + (data.private ? "비공개 ✓" : "⚠ 공개 저장소예요! 이대로면 내용이 노출됩니다") +
+      " · 기본 브랜치 " + data.default_branch;
   }
 
   $("btn-test").addEventListener("click", async function () {
     var f = readForm();
     if (!f.repo || !f.token) { $("msg").textContent = "저장소와 토큰을 입력해 주세요."; return; }
     $("msg").textContent = "확인 중…";
-    try {
-      var res = await fetch(API + "/repos/" + f.repo, {
-        headers: {
-          "Authorization": "Bearer " + f.token,
-          "Accept": "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
-      });
-      var data = null;
-      try { data = await res.json(); } catch (e) {}
-      if (!res.ok) {
-        var err = new Error((data && data.message) || ("HTTP " + res.status));
-        err.status = res.status;
-        throw err;
+    var lines = [];
+    try { lines.push(await testRepo(f.repo, f.token, "데이터")); }
+    catch (e) { lines.push("데이터 저장소: " + friendlyErr(e)); }
+    if (f.imgRepo) {
+      try { lines.push(await testRepo(f.imgRepo, f.imgToken || f.token, "이미지")); }
+      catch (e) {
+        lines.push("이미지 저장소: " + (e && e.status === 404
+          ? "찾을 수 없어요. 저장소 이름과, 토큰의 Repository access에 이 저장소가 들어 있는지 확인해 주세요."
+          : friendlyErr(e)));
       }
-      $("msg").textContent = "연결 성공 — " + data.full_name +
-        " · " + (data.private ? "비공개 ✓" : "⚠ 공개 저장소예요! 이대로면 대화가 노출됩니다") +
-        " · 기본 브랜치 " + data.default_branch;
-    } catch (e) {
-      $("msg").textContent = friendlyErr(e);
     }
+    $("msg").innerHTML = lines.map(esc).join("<br>");
   });
 
   $("btn-save").addEventListener("click", function () {
@@ -3263,27 +3344,725 @@ function pageSettings(firstRun) {
       return;
     }
     if (!f.token) { $("msg").textContent = "토큰을 입력해 주세요."; return; }
+    if (f.imgRepo && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(f.imgRepo)) {
+      $("msg").textContent = "이미지 저장소도 아이디/저장소이름 형식으로 적어주세요. 예: myid/chat-archive-images";
+      return;
+    }
+    if (f.imgRepo && f.imgRepo === f.repo) {
+      $("msg").textContent = "이미지 저장소는 데이터 저장소와 다른 저장소여야 해요.";
+      return;
+    }
     setCfg(f);
     resetState();
+    resetGallery();
     hydrateFromCache();
+    hydrateGallery();
     go("/");
     syncIndex(true);
+    syncGallery(true);
   });
 
   var cc = $("btn-cc");
-  if (cc) cc.addEventListener("click", function () {
+  if (cc) cc.addEventListener("click", async function () {
     try { localStorage.removeItem(cacheKey()); } catch (e) {}
+    await clearGalStore();
     resetState();
-    $("msg").textContent = "캐시를 비웠어요. 다음 동기화 때 전부 다시 내려받습니다.";
+    resetGallery();
+    $("msg").textContent = "캐시를 비웠어요. 다음 동기화 때 기록과 이미지를 전부 다시 내려받습니다.";
   });
   var outBtn = $("btn-out");
-  if (outBtn) outBtn.addEventListener("click", function () {
-    if (!confirm("이 기기에서 토큰과 캐시를 지울까요? (GitHub의 기록은 그대로 남아요)")) return;
+  if (outBtn) outBtn.addEventListener("click", async function () {
+    if (!confirm("이 기기에서 토큰과 캐시를 지울까요? (GitHub의 기록과 이미지는 그대로 남아요)")) return;
     try { localStorage.removeItem(cacheKey()); } catch (e) {}
+    await clearGalStore();
     try { localStorage.removeItem(LS_CFG); } catch (e) {}
     resetState();
+    resetGallery();
     pageSettings(true);
   });
+}
+
+/* ================================================================
+   갤러리 — 이미지 전용 저장소 (텍스트 저장소와 분리)
+   · 저장소 트리에서 이미지 파일만 골라 "첫 폴더 = 캐릭터"로 묶어 보여준다
+   · 비공개 저장소라 <img src>로 바로 못 불러오므로 토큰을 붙여 blob으로 받는다
+   · 받은 원본/썸네일은 브라우저 Cache API에 sha 기준으로 저장 → 두 번째부턴 요청 없음
+   ================================================================ */
+var IMG_EXT = /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/i;
+var IMG_MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
+  gif: "image/gif", avif: "image/avif", bmp: "image/bmp", svg: "image/svg+xml" };
+var GAL_ALL = "*", GAL_ROOT = "~";        // ?folder= 특수값: 전체 / 미분류(저장소 최상위)
+var THUMB_MAX = 512;                       // 썸네일 긴 변
+var UP_MAX = 2048;                         // 올릴 때 WebP 변환 긴 변
+var FULL_KEEP = 16;                        // 세션 중 메모리에 들고 있을 원본 object URL 수
+var LS_GAL_WEBP = "archive-gallery-webp";
+var GAL = { onFiles: null };
+
+var G = {
+  items: [], loaded: false, syncing: false, syncP: null, lastSync: 0, err: null, offline: false,
+  branch: null, repoPrivate: null, busy: false, lastMsg: null,
+  turl: {},            // sha -> 썸네일 object URL
+  furl: {}, ford: [],  // sha -> 원본 object URL (+ 순서, 오래된 것부터 해제)
+};
+
+function imgCfg() {
+  var c = getCfg();
+  return { repo: (c.imgRepo || "").trim(), token: (c.imgToken || c.token || "").trim(), branch: (c.imgBranch || "").trim() };
+}
+function imgCfgOk() {
+  var c = imgCfg();
+  return !!(c.token && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(c.repo));
+}
+function galCacheKey() { return "archive-gallery::" + imgCfg().repo; }
+function loadGalCache() {
+  try { return JSON.parse(localStorage.getItem(galCacheKey()) || "null"); } catch (e) { return null; }
+}
+function saveGalCache() {
+  try {
+    localStorage.setItem(galCacheKey(), JSON.stringify({
+      branch: G.branch,
+      items: G.items.map(function (i) { return [i.path, i.sha, i.size]; }),
+    }));
+  } catch (e) {}
+}
+function galStoreName() { return "archive-img::" + imgCfg().repo; }
+async function clearGalStore() {
+  try { localStorage.removeItem(galCacheKey()); } catch (e) {}
+  if (window.caches) { try { await caches.delete(galStoreName()); } catch (e) {} }
+}
+function resetGallery() {
+  Object.keys(G.turl).forEach(function (k) { try { URL.revokeObjectURL(G.turl[k]); } catch (e) {} });
+  Object.keys(G.furl).forEach(function (k) { try { URL.revokeObjectURL(G.furl[k]); } catch (e) {} });
+  G.items = []; G.loaded = false; G.syncing = false; G.syncP = null; G.lastSync = 0; G.err = null;
+  G.offline = false; G.branch = null; G.repoPrivate = null; G.busy = false; G.lastMsg = null;
+  G.turl = {}; G.furl = {}; G.ford = [];
+}
+function hydrateGallery() {
+  if (!imgCfgOk()) return;
+  var c = loadGalCache();
+  if (!c || !c.items) return;
+  G.branch = c.branch || null;
+  G.items = c.items.map(function (a) { return itemFromPath(a[0], a[1], a[2]); });
+  sortItems(G.items);
+  if (G.items.length) G.loaded = true;
+}
+
+function itemFromPath(path, sha, size) {
+  var i = path.indexOf("/");
+  return { path: path, sha: sha, size: size || 0,
+    folder: i < 0 ? "" : path.slice(0, i), name: i < 0 ? path : path.slice(i + 1) };
+}
+var COLL = new Intl.Collator("ko", { numeric: true, sensitivity: "base" });
+function sortItems(items) {
+  items.sort(function (a, b) { return COLL.compare(a.folder, b.folder) || COLL.compare(a.name, b.name); });
+}
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return Math.round(n / 1024) + " KB";
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
+  return (n / 1073741824).toFixed(2) + " GB";
+}
+function mimeOf(name) {
+  var m = /\.([a-z0-9]+)$/i.exec(name);
+  return (m && IMG_MIME[m[1].toLowerCase()]) || "application/octet-stream";
+}
+function folderLabel(f) { return f === "" ? "미분류" : f; }
+function folderParam(f) { return f === "" ? GAL_ROOT : f; }
+function galFolders() {   // [{name, items, size}] — 이름순, 미분류는 맨 뒤
+  var by = new Map();
+  G.items.forEach(function (it) {
+    var f = by.get(it.folder);
+    if (!f) { f = { name: it.folder, items: [], size: 0 }; by.set(it.folder, f); }
+    f.items.push(it); f.size += it.size;
+  });
+  var arr = Array.from(by.values());
+  arr.sort(function (a, b) {
+    if (a.name === "") return 1;
+    if (b.name === "") return -1;
+    return COLL.compare(a.name, b.name);
+  });
+  return arr;
+}
+function galErr(e) {
+  if (e && e.friendly) return e.message;
+  if (e && e.status === 404) return "이미지 저장소를 찾을 수 없어요. 설정의 이미지 저장소 이름과 토큰 권한(해당 저장소 Contents 읽기·쓰기)을 확인해 주세요.";
+  return friendlyErr(e);
+}
+
+/* ---------------- 동기화: 트리 한 번으로 목록 전부 ---------------- */
+function syncGallery(force) {
+  if (G.syncing) return G.syncP;
+  if (!force && G.lastSync && (Date.now() - G.lastSync < 60000)) return Promise.resolve();
+  if (!imgCfgOk()) return Promise.resolve();
+  G.syncing = true;
+  G.err = null;
+  G.syncP = (async function () {
+    var ic = imgCfg();
+    var repo = await gh("/repos/" + ic.repo, { token: ic.token });
+    G.repoPrivate = !!repo.private;
+    G.branch = ic.branch || repo.default_branch || "main";
+    var tree = [];
+    try {
+      var t = await gh("/repos/" + ic.repo + "/git/trees/" + encodeURIComponent(G.branch) + "?recursive=1", { token: ic.token });
+      tree = t.tree || [];
+    } catch (e) {
+      if (e.status === 404 || e.status === 409) tree = [];   // 빈 저장소
+      else throw e;
+    }
+    var items = [];
+    tree.forEach(function (it) {
+      if (it.type !== "blob" || !IMG_EXT.test(it.path)) return;
+      if (it.path.split("/").some(function (seg) { return seg[0] === "."; })) return;   // .github 등은 제외
+      items.push(itemFromPath(it.path, it.sha, it.size || 0));
+    });
+    sortItems(items);
+    G.items = items;
+    G.loaded = true;
+    G.offline = false;
+    G.lastSync = Date.now();
+    saveGalCache();
+  })().catch(function (e) {
+    G.err = galErr(e);
+    if (G.items.length) { G.offline = true; G.loaded = true; }
+  }).finally(function () {
+    G.syncing = false;
+    if (formIsOpen()) return;
+    if (parseRoute().path === "/gallery") render();
+  });
+  return G.syncP;
+}
+
+/* ---------------- 이미지 받기 + Cache API ---------------- */
+async function galStore() {
+  if (!window.caches) return null;
+  try { return await caches.open(galStoreName()); } catch (e) { return null; }
+}
+function cacheReq(kind, sha) { return "https://archive-gallery.invalid/" + kind + "/" + sha; }
+
+function b64decBytes(b64) {
+  var bin = atob(String(b64).replace(/\s+/g, ""));
+  var bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+function b64encBytes(bytes) {
+  var bin = "";
+  for (var i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+
+/* blob sha로 원본 받기 — raw 미디어 타입 우선, 안 되면 base64 JSON으로 */
+async function fetchBlobRaw(sha, mime) {
+  var ic = imgCfg();
+  var base = API + "/repos/" + ic.repo + "/git/blobs/" + sha;
+  var res = await fetch(base, {
+    headers: {
+      "Authorization": "Bearer " + ic.token,
+      "Accept": "application/vnd.github.raw+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  if (res.ok) {
+    var ct = res.headers.get("content-type") || "";
+    if (!/json/i.test(ct)) return new Blob([await res.arrayBuffer()], { type: mime });
+    try {
+      var j = await res.json();
+      if (j && j.content) return new Blob([b64decBytes(j.content)], { type: mime });
+    } catch (e) {}
+    throw new Error("빈 응답");
+  }
+  if (res.status === 406 || res.status === 415) {
+    var b = await gh("/repos/" + ic.repo + "/git/blobs/" + sha, { token: ic.token });
+    return new Blob([b64decBytes(b.content)], { type: mime });
+  }
+  var err = new Error("HTTP " + res.status);
+  err.status = res.status;
+  try { var d = await res.json(); if (d && d.message) err.message = d.message; } catch (e) {}
+  throw err;
+}
+
+async function getFull(item) {
+  var c = await galStore();
+  if (c) {
+    try { var hit = await c.match(cacheReq("full", item.sha)); if (hit) return await hit.blob(); } catch (e) {}
+  }
+  var blob = await fetchBlobRaw(item.sha, mimeOf(item.name));
+  if (c) { try { await c.put(cacheReq("full", item.sha), new Response(blob)); } catch (e) {} }
+  return blob;
+}
+
+async function makeThumb(blob, max) {
+  max = max || THUMB_MAX;
+  if (blob.type === "image/svg+xml") return blob;
+  try {
+    var bmp = await createImageBitmap(blob);
+    var w = bmp.width, h = bmp.height;
+    if (Math.max(w, h) <= max && blob.size < 160000) { bmp.close(); return blob; }
+    var s = Math.min(1, max / Math.max(w, h));
+    var cw = Math.max(1, Math.round(w * s)), ch = Math.max(1, Math.round(h * s));
+    var cv = document.createElement("canvas");
+    cv.width = cw; cv.height = ch;
+    cv.getContext("2d").drawImage(bmp, 0, 0, cw, ch);
+    bmp.close();
+    var out = await new Promise(function (res) { cv.toBlob(res, "image/webp", 0.82); });
+    if (!out) return blob;
+    return out.size < blob.size ? out : blob;
+  } catch (e) { return blob; }
+}
+
+async function getThumb(item) {
+  var c = await galStore();
+  if (c) {
+    try { var hit = await c.match(cacheReq("thumb", item.sha)); if (hit) return await hit.blob(); } catch (e) {}
+  }
+  var full = await getFull(item);
+  var th = await makeThumb(full);
+  if (c) { try { await c.put(cacheReq("thumb", item.sha), new Response(th)); } catch (e) {} }
+  return th;
+}
+
+function keepFull(sha, url) {
+  if (G.furl[sha]) { try { URL.revokeObjectURL(url); } catch (e) {} return G.furl[sha]; }
+  G.furl[sha] = url;
+  G.ford.push(sha);
+  while (G.ford.length > FULL_KEEP) {
+    var old = G.ford.shift();
+    if (old === sha) continue;
+    try { URL.revokeObjectURL(G.furl[old]); } catch (e) {}
+    delete G.furl[old];
+  }
+  return url;
+}
+
+/* ---------------- 썸네일 큐: 화면에 보이는 것부터, 동시 4장 ---------------- */
+var TQ = { q: [], active: 0, max: 4, io: null };
+function tqObserve(el, item) {
+  el._item = item;
+  var url = G.turl[item.sha];
+  var img = el.querySelector("img");
+  if (url && img) { img.onload = function () { img.classList.add("ready"); }; img.src = url; return; }
+  if (!("IntersectionObserver" in window)) { tqPush(el); return; }
+  if (!TQ.io) {
+    TQ.io = new IntersectionObserver(function (ents) {
+      ents.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        TQ.io.unobserve(en.target);
+        tqPush(en.target);
+      });
+    }, { rootMargin: "600px 0px" });
+  }
+  TQ.io.observe(el);
+}
+function tqPush(el) { TQ.q.push(el); tqPump(); }
+function tqPump() {
+  while (TQ.active < TQ.max && TQ.q.length) {
+    var el = TQ.q.shift();
+    if (!el.isConnected) continue;
+    TQ.active++;
+    loadThumbInto(el).finally(function () { TQ.active--; tqPump(); });
+  }
+}
+async function loadThumbInto(el) {
+  var item = el._item, img = el.querySelector("img");
+  if (!item || !img) return;
+  try {
+    var url = G.turl[item.sha];
+    if (!url) {
+      var blob = await getThumb(item);
+      url = G.turl[item.sha] || (G.turl[item.sha] = URL.createObjectURL(blob));
+    }
+    img.onload = function () { img.classList.add("ready"); };
+    img.src = url;
+  } catch (e) {
+    if (!el.isConnected) return;
+    var er = document.createElement("div");
+    er.className = "gerr";
+    er.textContent = (e && e.status === 403 && /rate limit/i.test(e.message || "")) ? "요청 한도 초과 — 잠시 후" : "불러오기 실패";
+    er.title = galErr(e);
+    el.appendChild(er);
+  }
+}
+
+/* ---------------- 라이트박스 ---------------- */
+function closeLightbox() {
+  var lb = $("lb");
+  if (!lb) return;
+  if (lb._onKey) document.removeEventListener("keydown", lb._onKey);
+  var dirty = !!lb._dirty;
+  lb.remove();
+  document.body.style.overflow = "";
+  if (dirty) render();
+}
+function openLightbox(list, idx) {
+  closeLightbox();
+  var lb = document.createElement("div");
+  lb.id = "lb"; lb.className = "lb";
+  lb.innerHTML =
+    '<button class="lb-x" type="button" title="닫기 (Esc)">✕</button>' +
+    '<button class="lb-nav prev" type="button" title="이전 (←)">‹</button>' +
+    '<div class="lb-stage"><img alt="" decoding="async"><div class="lb-load">불러오는 중…</div></div>' +
+    '<button class="lb-nav next" type="button" title="다음 (→)">›</button>' +
+    '<div class="lb-bar"><span class="pos"></span><b class="name"></b><span class="size"></span><span class="fsp"></span>' +
+    '<button class="btn small" id="lb-save" type="button">저장</button>' +
+    '<a class="btn small" id="lb-gh" target="_blank" rel="noopener" title="GitHub에서 이 파일 열기">GitHub</a>' +
+    '<button class="btn small danger" id="lb-del" type="button">삭제</button></div>';
+  document.body.appendChild(lb);
+  document.body.style.overflow = "hidden";
+
+  var img = lb.querySelector("img"), load = lb.querySelector(".lb-load");
+  var i = idx, cur = null, seq = 0;
+  if (list.length < 2) lb.querySelectorAll(".lb-nav").forEach(function (b) { b.style.display = "none"; });
+
+  async function show(k) {
+    if (!list.length) { closeLightbox(); return; }
+    i = ((k % list.length) + list.length) % list.length;
+    cur = list[i];
+    var my = ++seq;
+    lb.querySelector(".pos").textContent = (i + 1) + " / " + list.length;
+    lb.querySelector(".name").textContent = (cur.folder ? cur.folder + " / " : "") + cur.name;
+    lb.querySelector(".size").textContent = fmtBytes(cur.size);
+    $("lb-gh").href = "https://github.com/" + imgCfg().repo + "/blob/" + encodeURIComponent(G.branch || "main") + "/" + encPath(cur.path);
+    img.classList.remove("ready");
+    var t = G.turl[cur.sha];
+    if (t) img.src = t; else img.removeAttribute("src");
+    load.textContent = "불러오는 중…"; load.style.display = "";
+    try {
+      var url = G.furl[cur.sha];
+      if (!url) {
+        var blob = await getFull(cur);
+        if (my !== seq) return;
+        url = keepFull(cur.sha, URL.createObjectURL(blob));
+      }
+      if (my !== seq) return;
+      img.onload = function () { if (my === seq) { img.classList.add("ready"); load.style.display = "none"; } };
+      img.src = url;
+    } catch (e) {
+      if (my === seq) load.textContent = galErr(e);
+    }
+  }
+
+  lb.querySelector(".lb-x").addEventListener("click", closeLightbox);
+  lb.querySelector(".prev").addEventListener("click", function () { show(i - 1); });
+  lb.querySelector(".next").addEventListener("click", function () { show(i + 1); });
+  lb.querySelector(".lb-stage").addEventListener("click", function (e) { if (e.target !== img) closeLightbox(); });
+  $("lb-save").addEventListener("click", async function () {
+    if (!cur) return;
+    try { downloadBlob(cur.name, await getFull(cur)); } catch (e) { load.textContent = galErr(e); load.style.display = ""; }
+  });
+  $("lb-del").addEventListener("click", async function () {
+    if (!cur) return;
+    if (!confirm("「" + cur.name + "」을(를) 이미지 저장소에서 지울까요?\n(git 이력에는 남아서 GitHub에서 되살릴 수 있어요)")) return;
+    var btn = $("lb-del"); btn.disabled = true;
+    try {
+      await deleteImage(cur);
+      lb._dirty = true;
+      list.splice(i, 1);
+      if (!list.length) { closeLightbox(); return; }
+      if (list.length < 2) lb.querySelectorAll(".lb-nav").forEach(function (b) { b.style.display = "none"; });
+      show(i);
+    } catch (e) {
+      load.textContent = galErr(e); load.style.display = "";
+    } finally { btn.disabled = false; }
+  });
+  lb._onKey = function (e) {
+    if (e.key === "Escape") closeLightbox();
+    else if (e.key === "ArrowLeft") show(i - 1);
+    else if (e.key === "ArrowRight") show(i + 1);
+  };
+  document.addEventListener("keydown", lb._onKey);
+  var tx = null;
+  lb.addEventListener("touchstart", function (e) { tx = e.touches.length === 1 ? e.touches[0].clientX : null; }, { passive: true });
+  lb.addEventListener("touchend", function (e) {
+    if (tx === null || !e.changedTouches.length) return;
+    var dx = e.changedTouches[0].clientX - tx; tx = null;
+    if (Math.abs(dx) > 48) show(dx < 0 ? i + 1 : i - 1);
+  }, { passive: true });
+  show(i);
+}
+
+/* ---------------- 올리기 / 지우기 / zip ---------------- */
+async function shrinkToWebp(file) {
+  if (!/^image\/(png|jpeg)$/.test(file.type)) return null;
+  try {
+    var bmp = await createImageBitmap(file);
+    var s = Math.min(1, UP_MAX / Math.max(bmp.width, bmp.height));
+    var cw = Math.max(1, Math.round(bmp.width * s)), ch = Math.max(1, Math.round(bmp.height * s));
+    var cv = document.createElement("canvas");
+    cv.width = cw; cv.height = ch;
+    cv.getContext("2d").drawImage(bmp, 0, 0, cw, ch);
+    bmp.close();
+    var out = await new Promise(function (res) { cv.toBlob(res, "image/webp", 0.85); });
+    if (!out || out.type !== "image/webp" || out.size >= file.size * 0.9) return null;   // 이득이 없으면 원본 그대로
+    return out;
+  } catch (e) { return null; }
+}
+function safeFileName(name) {
+  return String(name || "image").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/^\.+/, "").trim() || "image";
+}
+function cleanGalFolder(name) {
+  name = String(name || "").trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, "");
+  name = name.replace(/^[ .]+|[ .]+$/g, "");
+  return name.slice(0, 60);
+}
+
+/* 한 장 올리기 → 저장된 item, 이미 같은 경로가 있으면 "exists" */
+async function uploadOne(file, folder, toWebp) {
+  var ic = imgCfg();
+  var blob = file, name = safeFileName(file.name);
+  if (toWebp) {
+    var w = await shrinkToWebp(file);
+    if (w) { blob = w; name = name.replace(/\.[^.]+$/, "") + ".webp"; }
+  }
+  var path = folder ? folder + "/" + name : name;
+  if (G.items.some(function (it) { return it.path === path; })) return "exists";
+  if (blob.size > 50 * 1048576) throw UErr("50MB보다 큰 파일은 올릴 수 없어요");
+  var bytes = new Uint8Array(await blob.arrayBuffer());
+  var body = { message: "이미지 추가: " + path, content: b64encBytes(bytes) };
+  if (G.branch) body.branch = G.branch;
+  var r = await gh("/repos/" + ic.repo + "/contents/" + encPath(path), { method: "PUT", token: ic.token, body: body });
+  var item = itemFromPath(path, r.content.sha, r.content.size || bytes.length);
+  G.items = G.items.filter(function (it) { return it.path !== path; });
+  G.items.push(item);
+  sortItems(G.items);
+  G.loaded = true;
+  saveGalCache();
+  // 방금 올린 건 다시 내려받을 필요 없이 캐시에 바로
+  var typed = new Blob([bytes], { type: mimeOf(name) });
+  var c = await galStore();
+  if (c) {
+    try {
+      await c.put(cacheReq("full", item.sha), new Response(typed));
+      await c.put(cacheReq("thumb", item.sha), new Response(await makeThumb(typed)));
+    } catch (e) {}
+  }
+  return item;
+}
+
+async function deleteImage(item) {
+  var ic = imgCfg();
+  var body = { message: "이미지 삭제: " + item.path, sha: item.sha };
+  if (G.branch) body.branch = G.branch;
+  await gh("/repos/" + ic.repo + "/contents/" + encPath(item.path), { method: "DELETE", token: ic.token, body: body });
+  G.items = G.items.filter(function (x) { return x.path !== item.path; });
+  saveGalCache();
+  if (!G.items.some(function (x) { return x.sha === item.sha; })) {
+    var c = await galStore();
+    if (c) { try { await c.delete(cacheReq("full", item.sha)); await c.delete(cacheReq("thumb", item.sha)); } catch (e) {} }
+  }
+}
+
+async function zipGallery(list, zipName, btn) {
+  if (!list.length || G.busy) return;
+  var total = 0;
+  list.forEach(function (it) { total += it.size; });
+  if (total > 400 * 1048576 && !confirm("총 " + fmtBytes(total) + "예요. zip을 만드는 동안 브라우저 메모리를 그만큼 씁니다. 계속할까요?")) return;
+  var orig = btn.textContent;
+  btn.disabled = true; G.busy = true;
+  var files = new Array(list.length), done = 0, idx = 0, failed = 0;
+  async function worker() {
+    while (idx < list.length) {
+      var k = idx++, it = list[k];
+      try {
+        var b = await getFull(it);
+        files[k] = { name: it.path, data: new Uint8Array(await b.arrayBuffer()) };
+      } catch (e) { failed++; }
+      done++;
+      btn.textContent = done + "/" + list.length;
+    }
+  }
+  try {
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    files = files.filter(Boolean);
+    if (files.length) downloadBlob(zipName, makeZip(files));
+  } finally {
+    btn.textContent = orig; btn.disabled = false; G.busy = false;
+  }
+  if (failed) alert(failed + "장은 받지 못했어요. 잠시 후 다시 시도해 주세요.");
+}
+
+/* ---------------- 페이지: 갤러리 ---------------- */
+function pageGallery(params) {
+  var topBase = '<a class="btn small" href="#/">서재로</a><a class="btn small" href="#/settings" title="설정">⚙</a>';
+
+  if (!imgCfgOk()) {
+    layout("갤러리",
+      '<div class="empty" style="margin-top:40px"><b>이미지 저장소가 아직 연결되지 않았어요</b>' +
+      "텍스트와는 따로, 이미지만 넣어둘 <b>비공개</b> 저장소를 하나 만들고 설정에 적어주세요." +
+      "<span>저장소 안에서 <code>캐릭터이름/파일.webp</code>처럼 폴더를 나누면 여기서 폴더(캐릭터)별로 모아 볼 수 있어요.</span>" +
+      '<p style="margin:18px 0 0"><a class="btn primary" href="#/settings">설정 열기</a></p></div>', topBase);
+    return;
+  }
+  if (!G.loaded) {
+    if (G.err && !G.syncing) {
+      layout("갤러리",
+        '<div class="empty" style="margin-top:60px"><b>이미지 목록을 불러오지 못했어요</b><span>' + esc(G.err) + "</span></div>" +
+        '<p style="text-align:center"><button class="btn" id="gal-retry">다시 시도</button> <a class="btn" href="#/settings">설정 확인</a></p>', topBase);
+      $("gal-retry").addEventListener("click", function () { syncGallery(true); render(); });
+      return;
+    }
+    layout("갤러리", '<div class="empty" style="margin-top:60px"><b>이미지 목록을 불러오는 중…</b><span>저장소 목록을 한 번만 읽으면 돼요</span></div>', topBase);
+    return;
+  }
+
+  var folder = params.get("folder");                 // null=폴더 목록, "*"=전체, "~"=미분류, 그 외=폴더 이름
+  var folders = galFolders();
+  var total = 0;
+  G.items.forEach(function (it) { total += it.size; });
+  var parts = [];
+  if (G.offline) parts.push('<div class="notice warn">연결에 실패해서 이 기기에 저장된 마지막 목록을 보여주고 있어요. (' + esc(G.err || "") + ")</div>");
+  if (G.repoPrivate === false) parts.push('<div class="notice warn">⚠ 이미지 저장소가 공개(public) 상태예요 — 누구나 볼 수 있습니다. GitHub 저장소 설정에서 Private으로 바꿔 주세요.</div>');
+  if (G.lastMsg) {
+    parts.push('<div class="gal-summary' + (G.lastMsg.err ? " err" : "") + '">' + G.lastMsg.html + "</div>");
+    G.lastMsg = null;
+  }
+  var syncBtn = '<button class="btn small" id="gal-sync" title="이미지 저장소와 동기화"' + (G.syncing ? " disabled" : "") + ">" + (G.syncing ? "…" : "↻") + "</button>";
+
+  function chipRow(cur) {
+    var chips = ['<a class="chip' + (cur === GAL_ALL ? " on" : "") + '" href="#/gallery?folder=*">전체<span class="n">' + G.items.length + "</span></a>"];
+    folders.forEach(function (f) {
+      var p = folderParam(f.name);
+      chips.push('<a class="chip' + (cur === p ? " on" : "") + '" href="#/gallery' + qs({ folder: p }) + '">' +
+        esc(folderLabel(f.name)) + '<span class="n">' + f.items.length + "</span></a>");
+    });
+    return '<div class="chips">' + chips.join("") + "</div>";
+  }
+
+  /* ----- 폴더 목록 (루트) ----- */
+  if (folder === null) {
+    parts.push('<div class="folder-head"><h1>갤러리</h1><div class="fmeta">' +
+      (G.items.length
+        ? folders.length + "개 폴더 · " + G.items.length + "장 · " + fmtBytes(total) + ' · <a href="#/gallery?folder=*">전부 한 화면에</a>'
+        : "아직 이미지가 없어요") + "</div></div>");
+    if (folders.length) {
+      var cards = folders.map(function (f, k) {
+        return '<a class="folder gal" href="#/gallery' + qs({ folder: folderParam(f.name) }) + '">' +
+          '<div class="gcover gthumb" data-k="' + k + '"><img alt="" decoding="async"></div>' +
+          '<div class="fname">' + esc(folderLabel(f.name)) + '<span class="n">' + f.items.length + "장</span></div>" +
+          '<div class="fmeta">' + fmtBytes(f.size) + "</div></a>";
+      });
+      parts.push('<h2 class="shelf-h">폴더 <span class="sub">· 캐릭터별</span></h2><div class="folders">' + cards.join("") + "</div>");
+    } else {
+      parts.push('<div class="empty"><b>비어 있어요</b>아래에 폴더 이름(캐릭터 이름)을 적어 열고, 그 안에 이미지를 떨어뜨리면 됩니다.' +
+        "<span>GitHub 웹에서 직접 폴더를 만들어 올려도 ↻ 동기화하면 똑같이 보여요.</span></div>");
+    }
+    parts.push('<form class="searchbar" id="gal-newf" style="margin-top:22px"><input type="text" id="gal-newf-name" placeholder="새 폴더 이름 (캐릭터 이름)" maxlength="60">' +
+      '<button class="btn" type="submit">폴더 열기</button></form>' +
+      '<div class="hint">폴더는 첫 이미지를 올릴 때 저장소에 실제로 만들어져요. 파일 이름은 그대로 두고, 폴더만 캐릭터 이름으로 나누면 됩니다.</div>');
+
+    layout("갤러리", parts.join("\n"),
+      syncBtn + '<button class="btn small" id="gal-zip" title="이미지 전부 zip으로 저장"' + (G.items.length ? "" : " disabled") + ">전체 zip</button>" + topBase);
+
+    document.querySelectorAll(".gthumb").forEach(function (el) {
+      var f = folders[+el.getAttribute("data-k")];
+      if (f && f.items.length) tqObserve(el, f.items[0]);
+    });
+    $("gal-sync").addEventListener("click", function () { syncGallery(true); render(); });
+    $("gal-zip").addEventListener("click", function () { zipGallery(G.items.slice(), "이미지백업-" + todayISO() + ".zip", this); });
+    $("gal-newf").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var n = cleanGalFolder($("gal-newf-name").value);
+      if (!n) return;
+      go("/gallery" + qs({ folder: n }));
+    });
+    return;
+  }
+
+  /* ----- 폴더 안 / 전체 ----- */
+  var fname = folder === GAL_ALL ? null : (folder === GAL_ROOT ? "" : folder);
+  var list = fname === null ? G.items.slice() : G.items.filter(function (it) { return it.folder === fname; });
+  var lsize = 0;
+  list.forEach(function (it) { lsize += it.size; });
+  var title = fname === null ? "전체" : folderLabel(fname);
+  var canUpload = fname !== null && cleanGalFolder(fname) === fname;
+
+  parts.push('<div class="folder-head"><h1>' + esc(title) + "</h1>" +
+    '<div class="fmeta">' + list.length + "장 · " + fmtBytes(lsize) + ' · <a href="#/gallery">← 갤러리 전체</a></div></div>');
+  parts.push(chipRow(folder === GAL_ALL ? GAL_ALL : folderParam(fname)));
+
+  if (list.length) {
+    parts.push('<div class="gal-grid">' + list.map(function (it, k) {
+      var cap = fname === null && it.folder ? it.folder + " / " + it.name : it.name;
+      return '<div class="gal-item gthumb" data-k="' + k + '" title="' + esc(cap) + '"><img alt="" decoding="async"><div class="gname">' + esc(cap) + "</div></div>";
+    }).join("") + "</div>");
+  } else {
+    parts.push('<div class="empty"><b>' + (fname === null ? "아직 이미지가 없어요" : "이 폴더는 비어 있어요") + "</b>" +
+      (canUpload ? "아래에 이미지를 떨어뜨리면 이 폴더로 올라가요." : "") + "</div>");
+  }
+
+  if (canUpload) {
+    var webpOn = true;
+    try { webpOn = localStorage.getItem(LS_GAL_WEBP) !== "0"; } catch (e) {}
+    parts.push('<div class="panel gal-up">' +
+      '<div class="drop" id="gal-drop" tabindex="0" role="button" aria-label="이미지 올리기">' +
+      '<input type="file" id="gal-file" multiple accept="image/*" style="display:none">' +
+      "<b>이미지를 여기에 끌어다 놓으면 「" + esc(title) + "」에 올라가요</b>" +
+      '<span>또는 <span class="link">파일 선택</span> — 여러 장을 한 번에 올려도 돼요 (한 장씩 차례로 저장돼요)</span></div>' +
+      '<label class="chk"><input type="checkbox" id="gal-webp"' + (webpOn ? " checked" : "") + "> PNG·JPG는 WebP로 줄여서 올리기 (긴 변 " + UP_MAX + "px · 화질 85 · 보통 1/3 크기)</label>" +
+      '<div class="pv-note" id="gal-msg"></div></div>');
+  }
+
+  layout(title, parts.join("\n"),
+    syncBtn + '<button class="btn small" id="gal-zip" title="이 화면의 이미지를 zip으로 저장"' + (list.length ? "" : " disabled") + ">" +
+    (fname === null ? "전체 zip" : "이 폴더 zip") + "</button>" + topBase);
+
+  document.querySelectorAll(".gal-item.gthumb").forEach(function (el) {
+    var k = +el.getAttribute("data-k");
+    tqObserve(el, list[k]);
+    el.addEventListener("click", function () { openLightbox(list, k); });
+  });
+  $("gal-sync").addEventListener("click", function () { syncGallery(true); render(); });
+  $("gal-zip").addEventListener("click", function () {
+    zipGallery(list.slice(), "이미지백업-" + (fname === null ? "전체" : folderLabel(fname)) + "-" + todayISO() + ".zip", this);
+  });
+
+  if (!canUpload) { GAL.onFiles = null; return; }
+
+  var drop = $("gal-drop"), input = $("gal-file"), msg = $("gal-msg");
+  $("gal-webp").addEventListener("change", function () {
+    try { localStorage.setItem(LS_GAL_WEBP, this.checked ? "1" : "0"); } catch (e) {}
+  });
+  drop.addEventListener("click", function () { if (!G.busy) input.click(); });
+  drop.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!G.busy) input.click(); } });
+  input.addEventListener("change", function () { if (input.files.length) GAL.onFiles(input.files); input.value = ""; });
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation(); if (!G.busy) drop.classList.add("over"); });
+  });
+  ["dragleave", "dragend"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+
+  GAL.onFiles = async function (files) {
+    if (G.busy) return;
+    var arr = Array.prototype.filter.call(files, function (f) { return /^image\//.test(f.type) || IMG_EXT.test(f.name); });
+    if (!arr.length) { msg.textContent = "이미지 파일이 아니에요."; return; }
+    var toWebp = $("gal-webp").checked;
+    G.busy = true;
+    drop.setAttribute("aria-disabled", "true");
+    var ok = 0, saved = 0, skipped = [], failed = [], fatal = false;
+    for (var k = 0; k < arr.length; k++) {
+      var f = arr[k];
+      msg.textContent = (k + 1) + "/" + arr.length + " 올리는 중… " + f.name;
+      try {
+        var r = await uploadOne(f, fname, toWebp);
+        if (r === "exists") skipped.push(f.name);
+        else { ok++; saved += r.size; }
+      } catch (e) {
+        failed.push(f.name + " — " + galErr(e));
+        if (e && (e.status === 401 || e.status === 404)) { fatal = true; break; }
+      }
+    }
+    G.busy = false;
+    var bits = [];
+    if (ok) bits.push("<b>" + ok + "장</b> 올렸어요 (" + fmtBytes(saved) + ")");
+    if (skipped.length) bits.push(skipped.length + "장은 같은 이름이 이미 있어서 건너뛰었어요: " + esc(skipped.join(", ")));
+    if (failed.length) bits.push(failed.length + "장 실패: " + esc(failed.join(" / ")));
+    if (fatal) bits.push("연결 문제로 중단했어요. 설정을 확인한 뒤 나머지를 다시 올려주세요.");
+    G.lastMsg = { html: bits.join("<br>"), err: !!failed.length };
+    render();
+  };
 }
 
 /* ---------------- 테마 ---------------- */
@@ -3301,12 +4080,15 @@ function toggleTheme() {
 /* ---------------- 라우팅 진입 ---------------- */
 function render() {
   var r = parseRoute();
+  var lb = $("lb");
+  if (lb) { lb._dirty = false; closeLightbox(); }
   if (!cfgOk() && r.path !== "/settings") { pageSettings(true); return; }
   if (r.path === "/" || r.path === "") { syncIndex(false); pageList(r.params); }
   else if (r.path === "/view") { syncIndex(false); pageView(r.params); }
   else if (r.path === "/new") { syncIndex(false); pageNew(r.params); }
   else if (r.path === "/import") { syncIndex(false); pageImport(r.params); }
   else if (r.path === "/edit") { syncIndex(false); pageEdit(r.params); }
+  else if (r.path === "/gallery") { syncGallery(false); pageGallery(r.params); }
   else if (r.path === "/settings") { pageSettings(false); }
   else { pageList(new URLSearchParams()); }
 }
@@ -3316,15 +4098,21 @@ document.addEventListener("DOMContentLoaded", function () {
   $("theme-btn").addEventListener("click", toggleTheme);
   setThemeIcon();
   /* 파일 백업 화면에서는 페이지 어디에 떨어뜨려도 받아주고, 브라우저가 파일을 열어버리지 않게 막는다 */
-  document.addEventListener("dragover", function (e) { if ($("imp-drop")) e.preventDefault(); });
+  document.addEventListener("dragover", function (e) { if ($("imp-drop") || $("gal-drop")) e.preventDefault(); });
   document.addEventListener("drop", function (e) {
-    var zone = $("imp-drop");
-    if (!zone) return;
+    var zone = $("imp-drop"), gz = $("gal-drop");
+    if (!zone && !gz) return;
     e.preventDefault();
-    zone.classList.remove("over");
-    if (IMP.onFiles && e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) IMP.onFiles(e.dataTransfer.files);
+    var files = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length ? e.dataTransfer.files : null;
+    if (zone) {
+      zone.classList.remove("over");
+      if (IMP.onFiles && files) IMP.onFiles(files);
+    } else {
+      gz.classList.remove("over");
+      if (GAL.onFiles && files) GAL.onFiles(files);
+    }
   });
-  if (cfgOk()) hydrateFromCache();
+  if (cfgOk()) { hydrateFromCache(); hydrateGallery(); }
   render();
 });
 
