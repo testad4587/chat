@@ -287,6 +287,26 @@ hr.endmark{border:none;height:1px;margin:60px auto 0;max-width:200px;
 .gal-summary{font-size:12.5px;color:var(--faint);margin:0 0 4px;line-height:1.7}
 .gal-summary b{color:var(--gold-soft);font-weight:600}
 .gal-summary.err{color:var(--danger)}
+/* 순서 바꾸기 — 썸네일은 브라우저 기본 드래그(파일로 떨어지는 것)를 막고, 포인터로 직접 옮긴다 */
+.gal-item{-webkit-user-select:none;user-select:none}
+.gal-item img,.gcover img,.lb-stage img{-webkit-user-drag:none}
+.tb-set{display:contents}.tb-set[hidden]{display:none}
+.gal-arr{border:1px solid var(--gold-dim);background:var(--panel2);border-radius:10px;padding:8px 12px;
+  font-size:12.5px;color:var(--dim);line-height:1.6;margin:0 0 4px;display:flex;gap:6px 12px;flex-wrap:wrap;align-items:center}
+.gal-arr b{color:var(--gold-soft);font-weight:600}
+.gal-arr .st{margin-left:auto;color:var(--faint)}
+.gal-arr .st.err{color:var(--danger)}
+.gal-grid.arranging{counter-reset:gi}
+.gal-grid.arranging .gal-item{cursor:grab;counter-increment:gi;touch-action:none;outline:1px dashed var(--line2);outline-offset:2px}
+.gal-grid.arranging .gal-item:focus{outline:2px solid var(--gold);outline-offset:2px}
+.gal-grid.arranging .gal-item::before{content:counter(gi);position:absolute;top:6px;left:6px;z-index:2;min-width:22px;height:22px;
+  padding:0 6px;border-radius:11px;background:rgba(9,7,15,.72);color:#e3ce9f;font-size:11.5px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;pointer-events:none;
+  font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+.gal-grid.arranging .gal-item.dragging{opacity:.28;outline:2px solid var(--gold)}
+.gal-ghost{position:fixed;z-index:70;pointer-events:none;margin:0;opacity:.94;transform:scale(1.04);
+  box-shadow:0 14px 40px rgba(0,0,0,.5);border-color:var(--gold);aspect-ratio:auto}
+body.gal-dragging,body.gal-dragging *{cursor:grabbing!important}
 /* 라이트박스 */
 .lb{position:fixed;inset:0;z-index:60;background:rgba(9,7,15,.94);display:flex;flex-direction:column;
   align-items:center;justify-content:center;padding:12px;
@@ -1563,7 +1583,8 @@ function formIsOpen() {
             document.getElementById("raw") ||
             document.getElementById("imp-drop") ||
             document.getElementById("lb") ||
-            (typeof G !== "undefined" && G.busy));
+            (typeof G !== "undefined" && G.busy) ||
+            (typeof ARR !== "undefined" && ARR.on));
 }
 
 function syncIndex(force) {
@@ -3292,7 +3313,8 @@ function pageSettings(firstRun) {
     "· 기록은 전부 <code>비공개 데이터 저장소</code>의 <code>data/</code> 폴더에 md 파일로 저장돼요. " +
     "기존 로컬(파이썬) 버전의 data 폴더를 그대로 올리면 이어서 쓸 수 있습니다.<br>" +
     "· 이미지는 <code>이미지 저장소</code>에 <code>캐릭터이름/파일.webp</code> 식으로 두면 갤러리에서 폴더별로 모아 봐요. " +
-    "한 번 본 이미지는 이 기기의 브라우저 캐시에 남아서 다시 내려받지 않습니다.</div></div>";
+    "한 번 본 이미지는 이 기기의 브라우저 캐시에 남아서 다시 내려받지 않습니다.<br>" +
+    "· 갤러리에서 바꾼 표시 순서는 각 폴더의 <code>.order.json</code>에 저장돼요. 파일 이름은 바뀌지 않고, 순서에 없는 새 이미지는 뒤에 이름순으로 붙습니다.</div></div>";
 
   layout("설정", body, cfgOk(cfg) ? '<a class="btn small" href="#/">서재로</a>' : "");
 
@@ -3405,10 +3427,16 @@ var UP_MAX = 2048;                         // 올릴 때 WebP 변환 긴 변
 var FULL_KEEP = 16;                        // 세션 중 메모리에 들고 있을 원본 object URL 수
 var LS_GAL_WEBP = "archive-gallery-webp";
 var GAL = { onFiles: null };
+/* 폴더별 표시 순서: <폴더>/.order.json 에 {"order":["a.webp","b.webp",…]} 로 저장 (미분류는 저장소 최상위) */
+var ORDER_FILE = ".order.json";
+var ORDER_RE = /^(?:([^\/]+)\/)?\.order\.json$/;
+/* 순서 바꾸기 모드 상태 (화면을 다시 그리면 항상 꺼진다) */
+var ARR = { on: false, grid: null, els: null, fname: null, drag: null, onKey: null };
 
 var G = {
   items: [], loaded: false, syncing: false, syncP: null, lastSync: 0, err: null, offline: false,
   branch: null, repoPrivate: null, busy: false, lastMsg: null,
+  order: {},           // folder -> { sha, names[] } (.order.json 내용, sha로 캐시 확인)
   turl: {},            // sha -> 썸네일 object URL
   furl: {}, ford: [],  // sha -> 원본 object URL (+ 순서, 오래된 것부터 해제)
 };
@@ -3430,6 +3458,7 @@ function saveGalCache() {
     localStorage.setItem(galCacheKey(), JSON.stringify({
       branch: G.branch,
       items: G.items.map(function (i) { return [i.path, i.sha, i.size]; }),
+      order: G.order,
     }));
   } catch (e) {}
 }
@@ -3443,13 +3472,20 @@ function resetGallery() {
   Object.keys(G.furl).forEach(function (k) { try { URL.revokeObjectURL(G.furl[k]); } catch (e) {} });
   G.items = []; G.loaded = false; G.syncing = false; G.syncP = null; G.lastSync = 0; G.err = null;
   G.offline = false; G.branch = null; G.repoPrivate = null; G.busy = false; G.lastMsg = null;
-  G.turl = {}; G.furl = {}; G.ford = [];
+  G.order = {}; G.turl = {}; G.furl = {}; G.ford = [];
 }
 function hydrateGallery() {
   if (!imgCfgOk()) return;
   var c = loadGalCache();
   if (!c || !c.items) return;
   G.branch = c.branch || null;
+  G.order = {};
+  if (c.order && typeof c.order === "object") {
+    Object.keys(c.order).forEach(function (f) {
+      var o = c.order[f];
+      if (o && typeof o.sha === "string" && Array.isArray(o.names)) G.order[f] = { sha: o.sha, names: o.names.filter(function (n) { return typeof n === "string"; }) };
+    });
+  }
   G.items = c.items.map(function (a) { return itemFromPath(a[0], a[1], a[2]); });
   sortItems(G.items);
   if (G.items.length) G.loaded = true;
@@ -3461,8 +3497,74 @@ function itemFromPath(path, sha, size) {
     folder: i < 0 ? "" : path.slice(0, i), name: i < 0 ? path : path.slice(i + 1) };
 }
 var COLL = new Intl.Collator("ko", { numeric: true, sensitivity: "base" });
+/* 폴더순 → 저장된 순서(.order.json) → 순서에 없는 것(새로 올린 것 등)은 뒤에 이름순 */
 function sortItems(items) {
-  items.sort(function (a, b) { return COLL.compare(a.folder, b.folder) || COLL.compare(a.name, b.name); });
+  var lut = new Map();
+  Object.keys(G.order).forEach(function (f) {
+    var m = new Map();
+    (G.order[f].names || []).forEach(function (n, i) { if (!m.has(n)) m.set(n, i); });
+    lut.set(f, m);
+  });
+  function oi(it) { var m = lut.get(it.folder); return m && m.has(it.name) ? m.get(it.name) : -1; }
+  items.sort(function (a, b) {
+    var c = COLL.compare(a.folder, b.folder);
+    if (c) return c;
+    var ia = oi(a), ib = oi(b);
+    if (ia !== ib) {
+      if (ia < 0) return 1;
+      if (ib < 0) return -1;
+      return ia - ib;
+    }
+    return COLL.compare(a.name, b.name);
+  });
+}
+function orderPath(folder) { return folder ? folder + "/" + ORDER_FILE : ORDER_FILE; }
+/* 트리에서 .order.json 들을 찾아 내용을 읽는다. sha가 캐시와 같으면 요청 없음. 못 읽으면 그 폴더는 이름순 */
+async function loadOrders(tree, ic) {
+  var found = {};
+  tree.forEach(function (it) {
+    if (it.type !== "blob") return;
+    var m = ORDER_RE.exec(it.path);
+    if (m) found[m[1] || ""] = it.sha;
+  });
+  var next = {};
+  await Promise.all(Object.keys(found).map(async function (f) {
+    var sha = found[f], prev = G.order[f];
+    if (prev && prev.sha === sha) { next[f] = prev; return; }
+    try {
+      var b = await gh("/repos/" + ic.repo + "/git/blobs/" + sha, { token: ic.token });
+      var j = JSON.parse(b64dec(b.content));
+      var names = Array.isArray(j) ? j : (j && Array.isArray(j.order) ? j.order : []);
+      next[f] = { sha: sha, names: names.filter(function (n) { return typeof n === "string"; }) };
+    } catch (e) {
+      if (prev) next[f] = prev;   // 이번엔 못 읽음 — 이전 내용으로 버티고 다음 동기화 때 다시
+    }
+  }));
+  G.order = next;
+}
+/* 폴더의 표시 순서를 .order.json 으로 저장 (커밋 1번). sha가 어긋나면 최신 sha로 한 번 더 */
+async function saveOrder(folder, names) {
+  var ic = imgCfg(), url = "/repos/" + ic.repo + "/contents/" + encPath(orderPath(folder));
+  var body = {
+    message: "이미지 순서 변경: " + folderLabel(folder),
+    content: b64enc(JSON.stringify({ order: names }, null, 2) + "\n"),
+  };
+  if (G.branch) body.branch = G.branch;
+  var ex = G.order[folder];
+  if (ex && ex.sha) body.sha = ex.sha;
+  var r;
+  try {
+    r = await gh(url, { method: "PUT", token: ic.token, body: body });
+  } catch (e) {
+    if (e.status !== 409 && e.status !== 422) throw e;
+    var cur = null;
+    try { cur = await gh(url + (G.branch ? "?ref=" + encodeURIComponent(G.branch) : ""), { token: ic.token }); } catch (e2) {}
+    if (cur && cur.sha) body.sha = cur.sha; else delete body.sha;
+    r = await gh(url, { method: "PUT", token: ic.token, body: body });
+  }
+  G.order[folder] = { sha: r.content.sha, names: names.slice() };
+  sortItems(G.items);
+  saveGalCache();
 }
 function fmtBytes(n) {
   n = Number(n) || 0;
@@ -3579,6 +3681,7 @@ function syncGallery(force) {
       if (it.path.split("/").some(function (seg) { return seg[0] === "."; })) return;   // .github 등은 제외
       items.push(itemFromPath(it.path, it.sha, it.size || 0));
     });
+    await loadOrders(tree, ic);
     sortItems(items);
     G.items = items;
     G.loaded = true;
@@ -3771,7 +3874,7 @@ function openLightbox(list, idx) {
   lb.innerHTML =
     '<button class="lb-x" type="button" title="닫기 (Esc)">✕</button>' +
     '<button class="lb-nav prev" type="button" title="이전 (←)">‹</button>' +
-    '<div class="lb-stage"><img alt="" decoding="async"><div class="lb-load">불러오는 중…</div></div>' +
+    '<div class="lb-stage"><img alt="" decoding="async" draggable="false"><div class="lb-load">불러오는 중…</div></div>' +
     '<button class="lb-nav next" type="button" title="다음 (→)">›</button>' +
     '<div class="lb-bar"><span class="pos"></span><b class="name"></b><span class="size"></span><span class="fsp"></span>' +
     '<button class="btn small" id="lb-save" type="button">저장</button>' +
@@ -3951,6 +4054,204 @@ async function zipGallery(list, zipName, btn) {
   if (failed) alert(failed + "장은 받지 못했어요. 잠시 후 다시 시도해 주세요.");
 }
 
+/* ---------------- 순서 바꾸기 (폴더 안에서 썸네일 끌어 옮기기) ----------------
+   · 브라우저 기본 드래그가 아니라 포인터 이벤트로 직접 옮긴다 → 파일로 떨어져 새로 올라가는 일이 없다
+   · 마우스는 그냥 끌면 바로 모드가 켜지고, 터치는 「순서 바꾸기」를 눌러 켠 뒤 끌 수 있다
+   · 저장 전까지는 화면에서만 바뀌고, 저장하면 폴더의 .order.json 을 한 번 커밋한다 */
+function arrItems() { return Array.prototype.slice.call(ARR.grid.querySelectorAll(".gal-item")); }
+function arrNames() { return arrItems().map(function (el) { return el._item.name; }); }
+function arrChanged() {
+  if (!ARR.on || !ARR.els) return false;
+  var now = arrItems();
+  return now.some(function (el, i) { return ARR.els[i] !== el; });
+}
+function arrRefresh() {
+  var b = $("gal-arr-save");
+  if (b) b.disabled = G.busy || !arrChanged();
+}
+function enterArrange() {
+  if (ARR.on || !ARR.grid) return;
+  ARR.on = true;
+  ARR.els = arrItems();
+  ARR.grid.classList.add("arranging");
+  ARR.els.forEach(function (el) { el.setAttribute("tabindex", "0"); });
+  var bar = $("gal-arr"), tb = $("gal-tb"), ta = $("gal-tb-arr");
+  if (bar) bar.hidden = false;
+  if (tb) tb.hidden = true;
+  if (ta) ta.hidden = false;
+  ARR.onKey = function (e) {
+    if (e.key === "Escape") {
+      if (ARR.drag) { arrEndDrag(); arrRefresh(); return; }
+      cancelArrange();
+      return;
+    }
+    var el = document.activeElement;
+    if (!el || !el.classList || !el.classList.contains("gal-item") || !ARR.grid || !ARR.grid.contains(el)) return;
+    var items = arrItems(), i = items.indexOf(el), j = i, cols = arrCols(items);
+    if (e.key === "ArrowLeft") j = i - 1;
+    else if (e.key === "ArrowRight") j = i + 1;
+    else if (e.key === "ArrowUp") j = i - cols;
+    else if (e.key === "ArrowDown") j = i + cols;
+    else if (e.key === "Home") j = 0;
+    else if (e.key === "End") j = items.length - 1;
+    else return;
+    e.preventDefault();
+    j = Math.max(0, Math.min(items.length - 1, j));
+    if (j === i) return;
+    if (j > i) ARR.grid.insertBefore(el, items[j].nextSibling);
+    else ARR.grid.insertBefore(el, items[j]);
+    try { el.focus({ preventScroll: true }); } catch (err) { el.focus(); }
+    el.scrollIntoView({ block: "nearest" });
+    arrRefresh();
+  };
+  document.addEventListener("keydown", ARR.onKey);
+  arrRefresh();
+}
+function arrCols(items) {
+  if (!items.length) return 1;
+  var top = items[0].getBoundingClientRect().top, n = 0;
+  for (var k = 0; k < items.length; k++) {
+    if (Math.abs(items[k].getBoundingClientRect().top - top) < 2) n++; else break;
+  }
+  return n || 1;
+}
+function exitArrange(revert) {
+  if (!ARR.on) return;
+  arrEndDrag();
+  if (revert && ARR.grid && ARR.els) ARR.els.forEach(function (el) { ARR.grid.appendChild(el); });
+  ARR.on = false;
+  if (ARR.grid) ARR.grid.classList.remove("arranging");
+  (ARR.els || []).forEach(function (el) { el.removeAttribute("tabindex"); });
+  ARR.els = null;
+  if (ARR.onKey) document.removeEventListener("keydown", ARR.onKey);
+  ARR.onKey = null;
+  var bar = $("gal-arr"), tb = $("gal-tb"), ta = $("gal-tb-arr"), st = $("gal-arr-st");
+  if (bar) bar.hidden = true;
+  if (tb) tb.hidden = false;
+  if (ta) ta.hidden = true;
+  if (st) { st.textContent = ""; st.classList.remove("err"); }
+}
+function cancelArrange() {
+  if (!ARR.on || G.busy) return;
+  if (arrChanged() && !confirm("바꾼 순서를 저장하지 않고 되돌릴까요?")) return;
+  exitArrange(true);
+}
+/* 화면을 다시 그릴 때 — 모드/드래그 상태를 전부 버린다 */
+function arrReset() {
+  if (ARR.onKey) document.removeEventListener("keydown", ARR.onKey);
+  arrEndDrag();
+  ARR.on = false; ARR.grid = null; ARR.els = null; ARR.fname = null; ARR.onKey = null;
+}
+async function saveArrange() {
+  if (!ARR.on || G.busy || !arrChanged()) return;
+  var names = arrNames(), fname = ARR.fname;
+  var b = $("gal-arr-save"), c = $("gal-arr-cancel"), st = $("gal-arr-st");
+  G.busy = true;
+  if (b) b.disabled = true;
+  if (c) c.disabled = true;
+  if (st) { st.textContent = "저장 중…"; st.classList.remove("err"); }
+  try {
+    await saveOrder(fname, names);
+    G.busy = false;
+    G.lastMsg = { html: "「" + esc(folderLabel(fname)) + "」 순서를 저장했어요 (" + names.length + "장)" };
+    exitArrange(false);
+    render();
+  } catch (e) {
+    G.busy = false;
+    if (st) { st.textContent = galErr(e); st.classList.add("err"); }
+    if (c) c.disabled = false;
+    arrRefresh();
+  }
+}
+/* 포인터로 끌기 */
+function arrBind(grid) {
+  grid.addEventListener("pointerdown", function (e) {
+    if (G.busy || ARR.drag || !ARR.grid) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    var el = e.target.closest ? e.target.closest(".gal-item") : null;
+    if (!el || el.parentNode !== grid) return;
+    if (!ARR.on && e.pointerType !== "mouse") return;   // 터치는 스크롤과 겹치니 모드를 켠 뒤에만
+    ARR.drag = { el: el, id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY,
+      ox: 0, oy: 0, moved: false, ghost: null, raf: 0 };
+  });
+  grid.addEventListener("pointermove", function (e) {
+    var d = ARR.drag;
+    if (!d || e.pointerId !== d.id) return;
+    d.x = e.clientX; d.y = e.clientY;
+    if (!d.moved) {
+      if (Math.hypot(d.x - d.x0, d.y - d.y0) < 7) return;
+      if (!ARR.on) enterArrange();
+      if (!ARR.on) { ARR.drag = null; return; }
+      d.moved = true;
+      arrStartGhost(d);
+      try { d.el.setPointerCapture(d.id); } catch (err) {}
+    }
+    arrTrack(d);
+  });
+  ["pointerup", "pointercancel"].forEach(function (ev) {
+    grid.addEventListener(ev, function (e) {
+      var d = ARR.drag;
+      if (!d || e.pointerId !== d.id) return;
+      arrEndDrag();
+      arrRefresh();
+    });
+  });
+}
+function arrStartGhost(d) {
+  var r = d.el.getBoundingClientRect();
+  var g = d.el.cloneNode(true);
+  g.classList.add("gal-ghost"); g.classList.remove("gthumb");
+  g.removeAttribute("tabindex"); g.removeAttribute("title"); g.removeAttribute("data-k");
+  g.style.width = r.width + "px"; g.style.height = r.height + "px";
+  g.style.left = r.left + "px"; g.style.top = r.top + "px";
+  d.ox = d.x0 - r.left; d.oy = d.y0 - r.top;
+  document.body.appendChild(g);
+  d.ghost = g;
+  d.el.classList.add("dragging");
+  document.body.classList.add("gal-dragging");
+  d.raf = requestAnimationFrame(function tick() {
+    if (ARR.drag !== d) return;
+    arrAutoScroll(d);
+    d.raf = requestAnimationFrame(tick);
+  });
+}
+function arrTrack(d) {
+  if (!d.ghost || !ARR.grid) return;
+  var grid = ARR.grid;
+  d.ghost.style.left = (d.x - d.ox) + "px";
+  d.ghost.style.top = (d.y - d.oy) + "px";
+  var under = document.elementFromPoint(d.x, d.y);
+  var t = under && under.closest ? under.closest(".gal-item") : null;
+  if (t && t !== d.el && t.parentNode === grid) {
+    var r = t.getBoundingClientRect();
+    if (d.x - r.left < r.width / 2) { if (d.el.nextSibling !== t) grid.insertBefore(d.el, t); }
+    else { if (t.nextSibling !== d.el) grid.insertBefore(d.el, t.nextSibling); }
+  } else if (under === grid) {
+    var items = arrItems(), first = items[0], last = items[items.length - 1];
+    var fr = first.getBoundingClientRect(), lr = last.getBoundingClientRect();
+    if (d.y > lr.bottom || (d.y >= lr.top && d.x > lr.right)) { if (last !== d.el) grid.appendChild(d.el); }
+    else if (d.y < fr.top || (d.y <= fr.bottom && d.x < fr.left)) { if (first !== d.el) grid.insertBefore(d.el, first); }
+  }
+}
+function arrAutoScroll(d) {
+  if (!d.moved) return;
+  var edge = 64, h = window.innerHeight, dy = 0;
+  if (d.y < edge) dy = -Math.ceil((edge - d.y) / 4);
+  else if (d.y > h - edge) dy = Math.ceil((d.y - (h - edge)) / 4);
+  if (dy) { window.scrollBy(0, dy); arrTrack(d); }
+}
+function arrEndDrag() {
+  var d = ARR.drag;
+  if (!d) return;
+  ARR.drag = null;
+  if (d.raf) cancelAnimationFrame(d.raf);
+  if (d.ghost) d.ghost.remove();
+  d.el.classList.remove("dragging");
+  document.body.classList.remove("gal-dragging");
+  try { d.el.releasePointerCapture(d.id); } catch (e) {}
+  if (d.moved) { try { d.el.focus({ preventScroll: true }); } catch (e) {} }
+}
+
 /* ---------------- 페이지: 갤러리 ---------------- */
 function pageGallery(params) {
   var topBase = '<a class="btn small" href="#/">서재로</a><a class="btn small" href="#/settings" title="설정">⚙</a>';
@@ -4045,16 +4346,22 @@ function pageGallery(params) {
   list.forEach(function (it) { lsize += it.size; });
   var title = fname === null ? "전체" : folderLabel(fname);
   var canUpload = fname !== null && cleanGalFolder(fname) === fname;
+  var canArrange = fname !== null && list.length >= 2;   // 순서는 폴더 안에서만 (전체 화면에선 폴더순 고정)
 
   parts.push('<div class="folder-head"><h1>' + esc(title) + "</h1>" +
     '<div class="fmeta">' + list.length + "장 · " + fmtBytes(lsize) + ' · <a href="#/gallery">← 갤러리 전체</a>' +
     (fname ? shelfLinkHtml(fname) : "") + "</div></div>");
   parts.push(chipRow(folder === GAL_ALL ? GAL_ALL : folderParam(fname)));
 
+  if (canArrange) {
+    parts.push('<div class="gal-arr" id="gal-arr" hidden><b>순서 바꾸는 중</b>' +
+      "<span>썸네일을 끌어서 원하는 자리에 놓거나, 하나를 고른 뒤 ← → ↑ ↓ 키로 옮겨요. 「순서 저장」을 눌러야 반영돼요.</span>" +
+      '<span class="st" id="gal-arr-st"></span></div>');
+  }
   if (list.length) {
-    parts.push('<div class="gal-grid">' + list.map(function (it, k) {
+    parts.push('<div class="gal-grid" id="gal-grid">' + list.map(function (it, k) {
       var cap = fname === null && it.folder ? it.folder + " / " + it.name : it.name;
-      return '<div class="gal-item gthumb" data-k="' + k + '" title="' + esc(cap) + '"><img alt="" decoding="async"><div class="gname">' + esc(cap) + "</div></div>";
+      return '<div class="gal-item gthumb" data-k="' + k + '" title="' + esc(cap) + '"><img alt="" decoding="async" draggable="false"><div class="gname">' + esc(cap) + "</div></div>";
     }).join("") + "</div>");
   } else {
     parts.push('<div class="empty"><b>' + (fname === null ? "아직 이미지가 없어요" : "이 폴더는 비어 있어요") + "</b>" +
@@ -4074,18 +4381,37 @@ function pageGallery(params) {
   }
 
   layout(title, parts.join("\n"),
-    syncBtn + '<button class="btn small" id="gal-zip" title="이 화면의 이미지를 zip으로 저장"' + (list.length ? "" : " disabled") + ">" +
-    (fname === null ? "전체 zip" : "이 폴더 zip") + "</button>" + topBase);
+    '<span class="tb-set" id="gal-tb">' + syncBtn +
+    '<button class="btn small" id="gal-zip" title="이 화면의 이미지를 zip으로 저장"' + (list.length ? "" : " disabled") + ">" +
+    (fname === null ? "전체 zip" : "이 폴더 zip") + "</button>" +
+    (canArrange ? '<button class="btn small" id="gal-arr-btn" title="썸네일을 끌어서 순서를 바꿔요">순서 바꾸기</button>' : "") + "</span>" +
+    (canArrange
+      ? '<span class="tb-set" id="gal-tb-arr" hidden><button class="btn small primary" id="gal-arr-save" disabled>순서 저장</button>' +
+        '<button class="btn small" id="gal-arr-cancel">취소</button></span>'
+      : "") +
+    topBase);
 
   document.querySelectorAll(".gal-item.gthumb").forEach(function (el) {
     var k = +el.getAttribute("data-k");
     tqObserve(el, list[k]);
-    el.addEventListener("click", function () { openLightbox(list, k); });
+    el.addEventListener("click", function () { if (!ARR.on) openLightbox(list, k); });
   });
   $("gal-sync").addEventListener("click", function () { syncGallery(true); render(); });
   $("gal-zip").addEventListener("click", function () {
     zipGallery(list.slice(), "이미지백업-" + (fname === null ? "전체" : folderLabel(fname)) + "-" + todayISO() + ".zip", this);
   });
+  if (canArrange) {
+    ARR.grid = $("gal-grid");
+    ARR.fname = fname;
+    arrBind(ARR.grid);
+    $("gal-arr-btn").addEventListener("click", function () {
+      enterArrange();
+      var first = ARR.grid.querySelector(".gal-item");
+      if (first) { try { first.focus({ preventScroll: true }); } catch (e) {} }
+    });
+    $("gal-arr-save").addEventListener("click", saveArrange);
+    $("gal-arr-cancel").addEventListener("click", cancelArrange);
+  }
 
   if (!canUpload) { GAL.onFiles = null; return; }
 
@@ -4151,6 +4477,7 @@ function render() {
   var r = parseRoute();
   var lb = $("lb");
   if (lb) { lb._dirty = false; closeLightbox(); }
+  arrReset();
   if (!cfgOk() && r.path !== "/settings") { pageSettings(true); return; }
   if (r.path === "/" || r.path === "") { syncIndex(false); syncGalleryOnce(); pageList(r.params); }
   else if (r.path === "/view") { syncIndex(false); syncGalleryOnce(); pageView(r.params); }
@@ -4172,6 +4499,7 @@ document.addEventListener("DOMContentLoaded", function () {
     var zone = $("imp-drop"), gz = $("gal-drop");
     if (!zone && !gz) return;
     e.preventDefault();
+    if ($("lb") || ARR.drag) return;   // 화면 안의 이미지를 끌어 놓은 건 파일 올리기가 아니다
     var files = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length ? e.dataTransfer.files : null;
     if (zone) {
       zone.classList.remove("over");
