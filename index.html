@@ -2102,7 +2102,8 @@ function pageList(params) {
     var nDocs = scoped.size, nChars = 0;
     scoped.forEach(function (d) { nChars += d.chars; });
     parts.push('<div class="folder-head"><h1>' + esc(folder) + "</h1>" +
-      '<div class="fmeta">' + nDocs + "개 기록 · 약 " + C.fmtNum(nChars) + '자 · <a href="#/">← 서재 전체</a></div></div>');
+      '<div class="fmeta">' + nDocs + "개 기록 · 약 " + C.fmtNum(nChars) + '자 · <a href="#/">← 서재 전체</a>' +
+      galLinkHtml([folder], true) + "</div></div>");
   }
 
   var ph = inFolder ? ("「" + folder + "」 서가에서 검색") : "본문·제목·태그에서 검색 (예: 리본, 응접실…)";
@@ -2120,8 +2121,10 @@ function pageList(params) {
   var sectionTitle = "";
   if (!inFolder && !searching && foldList.length) {
     var cards = foldList.map(function (kv) {
+      var gf = galFolderNamed(kv[0]);
       return '<a class="folder" href="#/' + qs({ folder: kv[0] }) + '"><div class="fname">' + esc(kv[0]) + "</div>" +
-        '<div class="fmeta">' + kv[1].count + "개 · 약 " + C.fmtNum(kv[1].chars) + "자</div></a>";
+        '<div class="fmeta">' + kv[1].count + "개 · 약 " + C.fmtNum(kv[1].chars) + "자" +
+        (gf ? " · 이미지 " + gf.items.length + "장" : "") + "</div></a>";
     });
     parts.push('<h2 class="shelf-h">서가</h2><div class="folders">' + cards.join("") + "</div>");
     rows = rows.filter(function (r) { return !r.d.folder; });
@@ -2328,6 +2331,11 @@ function pageView(params) {
   var foldHtml = d.folder
     ? '<a class="fold" href="#/' + qs({ folder: d.folder }) + '">' + esc(d.folder) + "</a>"
     : "";
+  var galFolder = galFolderNamed(d.folder) || galFolderNamed(character);
+  var galChip = galFolder
+    ? '<a class="fold" href="#/gallery' + qs({ folder: folderParam(galFolder.name) }) + '" title="갤러리에서 보기">' +
+      esc(galFolder.name) + " 이미지 " + galFolder.items.length + "장</a>"
+    : "";
 
   var navHtml = "";
   if (pages > 1) {
@@ -2397,7 +2405,7 @@ function pageView(params) {
 
   var body =
     '<div class="reader-head"><h1>' + esc(title) + "</h1>" +
-    '<div class="meta">' + foldHtml + C.metaLine(meta, d) + "</div></div>" +
+    '<div class="meta">' + foldHtml + galChip + C.metaLine(meta, d) + "</div></div>" +
     branchNote +
     searchHtml +
     '<div class="reader">' + navHtml +
@@ -3490,6 +3498,61 @@ function galErr(e) {
   return friendlyErr(e);
 }
 
+/* ---------------- 서가 ↔ 갤러리 연결: 이름이 같으면 서로 링크 ---------------- */
+function normName(s) { return String(s || "").trim().toLowerCase(); }
+
+/* 서가 폴더 이름/캐릭터 이름과 같은 갤러리 폴더 → {name, items, size} */
+function galFolderNamed(name) {
+  var key = normName(name);
+  if (!key || !imgCfgOk() || !G.items.length) return null;
+  var found = null;
+  galFolders().some(function (f) {
+    if (f.name && normName(f.name) === key) { found = f; return true; }
+    return false;
+  });
+  return found;
+}
+/* 서가 쪽에 붙이는 링크. names는 우선순위대로 후보 (폴더, 캐릭터). 없으면 create일 때만 "만들기" 링크 */
+function galLinkHtml(names, create) {
+  if (!imgCfgOk()) return "";
+  var f = null;
+  names.some(function (n) { f = galFolderNamed(n); return !!f; });
+  if (f) {
+    return ' · <a href="#/gallery' + qs({ folder: folderParam(f.name) }) + '" title="갤러리에서 보기">갤러리 「' +
+      esc(f.name) + "」 " + f.items.length + "장 →</a>";
+  }
+  var n0 = cleanGalFolder(names[0] || "");
+  if (!create || !n0) return "";
+  return ' · <a href="#/gallery' + qs({ folder: n0 }) + '" title="갤러리에 같은 이름의 폴더를 열어 이미지를 올려요">갤러리에 「' + esc(n0) + "」 폴더 만들기</a>";
+}
+/* 갤러리 폴더 이름과 같은 서가 폴더 → 없으면 같은 이름의 캐릭터 → {kind, name, count} */
+function shelfMatch(name) {
+  var key = normName(name);
+  if (!key) return null;
+  var found = null;
+  C.allFolders(S.index).some(function (kv) {
+    if (normName(kv[0]) === key) { found = { kind: "folder", name: kv[0], count: kv[1].count }; return true; }
+    return false;
+  });
+  if (found) return found;
+  C.allCharacters(S.index).some(function (kv) {
+    if (normName(kv[0]) === key) { found = { kind: "who", name: kv[0], count: kv[1] }; return true; }
+    return false;
+  });
+  return found;
+}
+function shelfLinkHtml(name) {
+  var m = shelfMatch(name);
+  if (!m) return "";
+  return m.kind === "folder"
+    ? ' · <a href="#/' + qs({ folder: m.name }) + '" title="서가에서 보기">서가 「' + esc(m.name) + "」 " + m.count + "개 기록 →</a>"
+    : ' · <a href="#/' + qs({ who: m.name }) + '" title="이 캐릭터의 기록만 보기">「' + esc(m.name) + "」 기록 " + m.count + "개 →</a>";
+}
+function shelfNoteText(name) {
+  var m = shelfMatch(name);
+  return m ? " · 기록 " + m.count + "개" : "";
+}
+
 /* ---------------- 동기화: 트리 한 번으로 목록 전부 ---------------- */
 function syncGallery(force) {
   if (G.syncing) return G.syncP;
@@ -3528,9 +3591,14 @@ function syncGallery(force) {
   }).finally(function () {
     G.syncing = false;
     if (formIsOpen()) return;
-    if (parseRoute().path === "/gallery") render();
+    render();   // 갤러리뿐 아니라 서가·리더의 연결 링크도 최신 목록 기준으로
   });
   return G.syncP;
+}
+/* 서가·리더에서는 세션에 한 번만 목록을 받아 온다 (연결 링크용, 트리 요청 1회) */
+function syncGalleryOnce() {
+  if (G.lastSync || G.syncing || G.err || !imgCfgOk()) return;
+  syncGallery(true);
 }
 
 /* ---------------- 이미지 받기 + Cache API ---------------- */
@@ -3941,7 +4009,7 @@ function pageGallery(params) {
         return '<a class="folder gal" href="#/gallery' + qs({ folder: folderParam(f.name) }) + '">' +
           '<div class="gcover gthumb" data-k="' + k + '"><img alt="" decoding="async"></div>' +
           '<div class="fname">' + esc(folderLabel(f.name)) + '<span class="n">' + f.items.length + "장</span></div>" +
-          '<div class="fmeta">' + fmtBytes(f.size) + "</div></a>";
+          '<div class="fmeta">' + fmtBytes(f.size) + (f.name ? shelfNoteText(f.name) : "") + "</div></a>";
       });
       parts.push('<h2 class="shelf-h">폴더 <span class="sub">· 캐릭터별</span></h2><div class="folders">' + cards.join("") + "</div>");
     } else {
@@ -3979,7 +4047,8 @@ function pageGallery(params) {
   var canUpload = fname !== null && cleanGalFolder(fname) === fname;
 
   parts.push('<div class="folder-head"><h1>' + esc(title) + "</h1>" +
-    '<div class="fmeta">' + list.length + "장 · " + fmtBytes(lsize) + ' · <a href="#/gallery">← 갤러리 전체</a></div></div>');
+    '<div class="fmeta">' + list.length + "장 · " + fmtBytes(lsize) + ' · <a href="#/gallery">← 갤러리 전체</a>' +
+    (fname ? shelfLinkHtml(fname) : "") + "</div></div>");
   parts.push(chipRow(folder === GAL_ALL ? GAL_ALL : folderParam(fname)));
 
   if (list.length) {
@@ -4083,8 +4152,8 @@ function render() {
   var lb = $("lb");
   if (lb) { lb._dirty = false; closeLightbox(); }
   if (!cfgOk() && r.path !== "/settings") { pageSettings(true); return; }
-  if (r.path === "/" || r.path === "") { syncIndex(false); pageList(r.params); }
-  else if (r.path === "/view") { syncIndex(false); pageView(r.params); }
+  if (r.path === "/" || r.path === "") { syncIndex(false); syncGalleryOnce(); pageList(r.params); }
+  else if (r.path === "/view") { syncIndex(false); syncGalleryOnce(); pageView(r.params); }
   else if (r.path === "/new") { syncIndex(false); pageNew(r.params); }
   else if (r.path === "/import") { syncIndex(false); pageImport(r.params); }
   else if (r.path === "/edit") { syncIndex(false); pageEdit(r.params); }
