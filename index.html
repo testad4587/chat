@@ -114,7 +114,7 @@ a.fold:hover{background:var(--panel2)}
 .reader-head h1{font-size:21px;margin:0 0 8px;font-weight:700}
 .reader-head .meta{font-size:13px;color:var(--dim);display:flex;gap:12px;flex-wrap:wrap}
 .reader-head .meta b{color:var(--gold)}.reader-head .meta i{font-style:normal;color:var(--lav)}
-.turn-mark{display:flex;align-items:center;gap:16px;margin:52px 0 26px;color:var(--gold)}
+.turn-mark{display:flex;align-items:center;gap:16px;margin:52px 0 26px;color:var(--gold);scroll-margin-top:76px}
 .turn-mark::before,.turn-mark::after{content:"";flex:1;height:1px;
   background:linear-gradient(90deg,transparent,var(--gold-dim));opacity:.55}
 .turn-mark::after{background:linear-gradient(90deg,var(--gold-dim),transparent)}
@@ -201,6 +201,56 @@ hr.endmark{border:none;height:1px;margin:60px auto 0;max-width:200px;
 .settings-note code{background:var(--panel2);border:1px solid var(--line2);border-radius:5px;
   padding:1px 6px;font-size:12px}
 
+/* ---- 파일 백업 (txt 자동 감지) ---- */
+.drop{border:2px dashed var(--line2);border-radius:14px;padding:34px 20px;text-align:center;
+  color:var(--dim);cursor:pointer;margin:0 0 12px;transition:border-color .15s,background .15s}
+.drop:hover,.drop:focus-visible{border-color:var(--gold-dim);outline:none}
+.drop.over{border-color:var(--gold);background:var(--panel2);color:var(--gold-soft)}
+.drop b{display:block;color:var(--text);font-size:15px;margin-bottom:6px}
+.drop .link{color:var(--gold);text-decoration:underline}
+.hint code{background:var(--panel2);border:1px solid var(--line2);border-radius:5px;padding:0 5px;font-size:11.5px}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dim);margin:12px 0 0;cursor:pointer;letter-spacing:0}
+.chk input{width:auto;margin:0;accent-color:var(--gold)}
+.badge{display:inline-block;border:1px solid var(--gold-dim);color:var(--gold);border-radius:6px;
+  padding:1px 8px;font-size:11.5px;font-weight:600;margin-left:8px;vertical-align:1px;white-space:nowrap}
+.badge.warn{border-color:#7a5a5a;color:var(--danger)}
+.imp-card .cap-no{font-size:14px;min-width:0}
+.imp-card .fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52vw}
+.imp-card.saved{opacity:.72}
+.imp-stat{font-size:12.5px;color:var(--dim);margin:0 0 12px;line-height:1.7}
+.imp-stat b{color:var(--gold);font-weight:600}
+.imp-card .field{margin-bottom:10px}
+.imp-card .grid2{margin-top:4px}
+.imp-card input[readonly]{color:var(--dim);background:var(--panel2)}
+.imp-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.imp-foot .ok{color:var(--gold-soft);font-weight:600}
+.imp-msg{font-size:12.5px;color:var(--faint)}
+.imp-msg.err{color:var(--danger)}
+.imp-preview{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
+.imp-preview .reader{font-size:15px}
+
+/* ---- 분기 ---- */
+.branch-line{display:flex;align-items:baseline;gap:8px;margin:-12px 0 26px;padding:9px 14px;
+  border:1px solid var(--gold-dim);border-radius:10px;background:var(--panel);color:var(--gold-soft);
+  font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:13.5px;line-height:1.5}
+.branch-line:hover{background:var(--panel2);border-color:var(--gold)}
+.branch-line .arrow{color:var(--gold);font-weight:700}
+.branch-line .note{color:var(--dim);margin-left:auto;white-space:nowrap;font-size:12.5px}
+.branch-line.up{border-style:dashed;color:var(--dim)}
+.branch-line.up:hover{color:var(--gold-soft)}
+.turn-mark.inh{opacity:.6}
+.blk.inh{opacity:.62}
+.blk.inh:hover{opacity:1}
+.branch-note{max-width:720px;margin:14px auto 0;font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+.branch-note a{color:var(--gold-soft);text-decoration:underline}
+.doc.sub{padding:10px 16px;margin-top:-6px;font-size:13.5px;color:var(--dim);border-style:dashed;
+  display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.doc.sub .arrow{color:var(--gold);font-weight:700}
+.doc.sub b{color:var(--gold)}
+.doc.sub .submeta{color:var(--faint);font-size:12.5px;margin-left:auto}
+.fold.branch{border-style:dashed;color:var(--dim)}
+.reader-head .meta u{text-decoration:none;color:var(--gold)}
+
 </style>
 </head>
 <body>
@@ -222,7 +272,7 @@ hr.endmark{border:none;height:1px;margin:60px auto 0;max-width:200px;
 "use strict";
 
 var APP_NAME = "채팅 서고";
-var META_KEYS = ["title", "character", "persona", "date", "tags", "source"];
+var META_KEYS = ["title", "character", "persona", "date", "tags", "source", "branch_of", "branch_at"];
 var PAGE_TURNS = 50;
 
 /* ---------------- 정규식 (app.py와 동일) ---------------- */
@@ -520,6 +570,9 @@ function docIdValid(docId) {
   return DOC_ID_RE.test(docId);
 }
 
+/* 폴더를 뺀 파일 이름 — 분기 참조(branch_of)는 이걸로 저장해서 폴더를 옮겨도 끊기지 않게 */
+function baseId(docId) { return String(docId || "").split("/").pop(); }
+
 function mtimeFromId(docId) {
   var base = docId.split("/").pop();
   var m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-/.exec(base);
@@ -539,6 +592,7 @@ function docFromText(docId, text, extra) {
   var nos = [];
   turns.forEach(function (t) { if (t.no !== null) nos.push(t.no); });
   var slash = docId.indexOf("/");
+  var bAt = parseInt(meta.branch_at || "", 10);
   return {
     id: docId,
     raw: text,
@@ -546,6 +600,8 @@ function docFromText(docId, text, extra) {
     body: body,
     turns: turns,
     folder: slash >= 0 ? docId.slice(0, slash) : "",
+    branchOf: (meta.branch_of || "").trim() || null,
+    branchAt: isNaN(bAt) ? null : bAt,
     mtime: extra.mtime !== undefined ? extra.mtime : mtimeFromId(docId),
     sha: extra.sha || null,
     chars: body.length,
@@ -663,18 +719,30 @@ function renderLine(ln) {
   return '<p class="ln' + dlg + '">' + esc + "</p>";
 }
 
-function renderTurns(turns, persona, character) {
+/* opt.links: { turnNo: [{href, label, note}] } — 그 턴 구분선 아래에 분기 링크 줄을 그린다
+   t.inh === true 인 턴은 원본에서 물려받은 부분(분기 기록에서만) */
+function renderTurns(turns, persona, character, opt) {
+  opt = opt || {};
+  var links = opt.links || {};
   var out = [];
   turns.forEach(function (t) {
     var anchor = t.no !== null ? "t" + t.no : "";
     var label = t.no !== null ? t.no + "턴" : (t.label || "기록");
-    out.push('<div class="turn-mark" id="' + anchor + '"><span>' + escapeHtml(label) + "</span></div>");
+    out.push('<div class="turn-mark' + (t.inh ? " inh" : "") + '" id="' + anchor + '"><span>' + escapeHtml(label) + "</span></div>");
+    if (t.no !== null && links[t.no]) {
+      links[t.no].forEach(function (l) {
+        out.push('<a class="branch-line' + (l.cls ? " " + l.cls : "") + '" href="' + escapeHtml(l.href) + '">' +
+          '<span class="arrow">↳</span> ' + escapeHtml(l.label) +
+          (l.note ? '<span class="note">' + escapeHtml(l.note) + "</span>" : "") + "</a>");
+      });
+    }
     t.blocks.forEach(function (b) {
       var sp = (b.speaker || "").trim();
       var cls;
       if (sp && sp === persona) cls = "self";
       else if (sp && sp === character) cls = "chara";
       else cls = "other";
+      if (t.inh) cls += " inh";
       out.push('<div class="blk ' + cls + '">');
       if (sp) out.push('<div class="who">' + escapeHtml(sp) + "</div>");
       b.paras.forEach(function (p) {
@@ -693,7 +761,9 @@ function metaLine(meta, d) {
   if (meta.character) parts.push("<b>" + escapeHtml(meta.character) + "</b>");
   if (meta.persona) parts.push("<i>" + escapeHtml(meta.persona) + "</i>");
   if (d !== undefined && d !== null) {
-    if (d.turn_min !== null) {
+    if (d.branchAt !== null && d.branchAt !== undefined) {
+      parts.push("<u>" + d.branchAt + "턴부터 분기</u>" + (d.turn_max !== null ? " · ~" + d.turn_max + "턴" : "") + " · " + d.n_turns + "개");
+    } else if (d.turn_min !== null) {
       var rng = d.turn_min !== d.turn_max ? d.turn_min + "~" + d.turn_max + "턴" : d.turn_min + "턴";
       parts.push(rng + " · " + d.n_turns + "개");
     }
@@ -740,6 +810,439 @@ function normalizeTags(s) {
   return String(s || "").trim().replace(/,+$/, "").replace(/^,+/, "").replace(/\s*,\s*/g, ", ");
 }
 
+/* ---------------- 파일 가져오기: txt 내보내기 형식 자동 감지 / 파싱 ----------------
+   지원 형식
+   1) caveduck : 블록이 ----로 나뉘고 첫 줄이 [나] / [캐릭터] / [이름] 인 Caveduck 내보내기
+   2) stamped  : "# 대화 내역: 제목" 머리말 + "[2026. 9. 12. PM 8:55:05] 이름:" 줄로 시작하는 메시지
+   3) turns    : "캐릭터: / 채팅방 이름: / 페르소나 이름:" 머리말 + [턴 N] → 내 입력, --- 아래가 캐릭터 응답
+   4) generic  : 그 밖의 파일 → 통짜 붙여넣기(parsePaste)와 같은 방식
+   파싱 결과는 이름 대신 role(user/char/other)을 들고 있다가, 저장 직전에
+   materializeImport()로 실제 이름표를 붙인다 (폼에서 이름을 고쳐도 그대로 반영되도록).
+   ---------------------------------------------------------------------------- */
+var ZWSP = "\u200B";
+var IMPORT_FORMATS = {
+  caveduck: "Caveduck 내보내기",
+  stamped: "타임스탬프 대화 내역",
+  turns: "[턴 N] 기록",
+  generic: "일반 형식",
+};
+var USER_TAGS = ["나", "유저", "user", "User", "USER", "You", "you"];
+var CD_TAG_RE = /^\[([^\[\]]{1,24})\]$/;
+var CD_SEP_RE = /^-{4,}$/;
+var CD_MARK_RE = /^[▶►▷➤→]+$/;
+var STAMP_HDR_RE = /^\[([^\]]*\d[^\]]*)\]\s+([^:：\[\]]{1,24}?)\s*[:：]\s*$/;
+var STAMP_DATE_RE = /(\d{4})\s*[.\-\/]\s*(\d{1,2})\s*[.\-\/]\s*(\d{1,2})/;
+var TURN_TAG_RE = /^\[\s*(?:턴|turn)\s*(\d{1,5})\s*\]$/i;
+var TURN_HDR_RE = /^(캐릭터|채팅방 이름|페르소나 이름|페르소나)\s*[:：]\s*(.*)$/;
+var HUD_RE = /<([A-Za-z_]*HUD)\b[\s\S]*?(?:\/>|<\/\1\s*>)/g;
+var HUD_TEST_RE = /<[A-Za-z_]*HUD\b/;
+
+function normalizeImportText(text) {
+  return String(text).replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+/* 줄 배열 → 문단 배열 (빈 줄이 문단 경계, 문단 안 줄은 \n으로 이어붙임) */
+function linesToParas(lines) {
+  var paras = [], cur = [];
+  lines.forEach(function (l) {
+    var t = String(l).trim();
+    if (!t) { if (cur.length) { paras.push(cur.join("\n")); cur = []; } return; }
+    cur.push(t);
+  });
+  if (cur.length) paras.push(cur.join("\n"));
+  return paras;
+}
+
+/* 본문 줄이 "## …" 나 "**이름:**" 으로 시작하면 저장 후 다시 읽을 때 턴/화자 구분으로
+   오해되므로, 보이지 않는 문자(U+200B)를 앞에 붙여 지켜준다. */
+function guardPara(p) {
+  return p.split("\n").map(function (l) {
+    return (/^##\s/.test(l) || MD_LABEL_RE.test(l)) ? ZWSP + l : l;
+  }).join("\n");
+}
+
+function isoDateFrom(m) {
+  var p = function (n) { return String(n).padStart(2, "0"); };
+  return m[1] + "-" + p(m[2]) + "-" + p(m[3]);
+}
+
+/* 메시지 목록에 role을 매긴다. 이름 없음 → char, 나/유저 → user,
+   [캐릭터] 또는 가장 많이 말한 이름 → char, 나머지 이름 → other(이름 그대로 저장) */
+function assignRoles(msgs) {
+  var counts = new Map();
+  msgs.forEach(function (m) {
+    if (!m.name || USER_TAGS.indexOf(m.name) >= 0 || m.name === "캐릭터") return;
+    counts.set(m.name, (counts.get(m.name) || 0) + 1);
+  });
+  var best = "", bestN = 0;
+  counts.forEach(function (n, k) { if (n > bestN) { best = k; bestN = n; } });
+  msgs.forEach(function (m) {
+    if (!m.name) m.role = "char";
+    else if (USER_TAGS.indexOf(m.name) >= 0) m.role = "user";
+    else if (m.name === "캐릭터" || m.name === best) m.role = "char";
+    else m.role = "other";
+  });
+  return best;
+}
+
+/* 메시지 → 턴. 내 입력이 나올 때마다 새 턴(번호는 나중에 순서대로), 그 앞의 캐릭터
+   첫 메시지는 "시작"이라는 이름 없는 턴으로. */
+function groupMessages(msgs) {
+  var turns = [], cur = null;
+  msgs.forEach(function (m) {
+    if (!m.paras.length) return;
+    if (m.role === "user") { cur = { no: null, seq: true, label: null, blocks: [] }; turns.push(cur); }
+    else if (!cur) { cur = { no: null, seq: false, label: "시작", blocks: [] }; turns.push(cur); }
+    cur.blocks.push({ role: m.role, name: m.name, paras: m.paras });
+  });
+  return turns;
+}
+
+function parseCaveduck(text) {
+  var msgs = [], cur = null, expectTag = true, afterTag = false;
+  function flush() {
+    if (cur) { cur.paras = linesToParas(cur.lines); delete cur.lines; msgs.push(cur); }
+    cur = null;
+  }
+  text.split("\n").forEach(function (raw) {
+    var line = rstrip(raw), t = line.trim();
+    if (CD_SEP_RE.test(t)) { flush(); expectTag = true; return; }
+    if (expectTag) {
+      if (!t) return;
+      var m = CD_TAG_RE.exec(t);
+      if (m) { cur = { name: m[1].trim(), lines: [] }; expectTag = false; afterTag = true; return; }
+      cur = { name: null, lines: [] }; expectTag = false; afterTag = false;
+    }
+    if (afterTag) {                       // 이름표 바로 뒤의 ▶ 표시·빈 줄은 건너뛴다
+      if (!t || CD_MARK_RE.test(t)) return;
+      afterTag = false;
+    }
+    cur.lines.push(line);
+  });
+  flush();
+  var character = assignRoles(msgs);
+  return { format: "caveduck", title: "", character: character, persona: "", date: "",
+    turns: groupMessages(msgs), hasHud: HUD_TEST_RE.test(text) };
+}
+
+function parseStamped(text) {
+  var title = "", exportDate = "", firstDate = "", msgs = [], cur = null;
+  function flush() {
+    if (cur) { cur.paras = linesToParas(cur.lines); delete cur.lines; msgs.push(cur); }
+    cur = null;
+  }
+  text.split("\n").forEach(function (raw) {
+    var line = rstrip(raw);
+    var hm = STAMP_HDR_RE.exec(line);
+    if (hm) {
+      flush();
+      cur = { name: hm[2].trim(), lines: [] };
+      if (!firstDate) { var dm = STAMP_DATE_RE.exec(hm[1]); if (dm) firstDate = isoDateFrom(dm); }
+      return;
+    }
+    if (!cur) {                           // 첫 메시지 전의 "# 키: 값" 머리말
+      var h = /^#\s*([^:：]+?)\s*[:：]\s*(.*)$/.exec(line.trim());
+      if (h) {
+        var k = h[1], v = h[2].trim();
+        if (/대화 내역|제목|title/i.test(k)) title = v;
+        else if (/내보내기|export/i.test(k)) { var dm2 = STAMP_DATE_RE.exec(v); if (dm2) exportDate = isoDateFrom(dm2); }
+        return;
+      }
+      if (!line.trim()) return;
+      cur = { name: null, lines: [] };
+    }
+    cur.lines.push(line);
+  });
+  flush();
+  var character = assignRoles(msgs);
+  return { format: "stamped", title: title, character: character, persona: "",
+    date: firstDate || exportDate, turns: groupMessages(msgs), hasHud: HUD_TEST_RE.test(text) };
+}
+
+function parseTurnsFile(text) {
+  var lines = text.split("\n");
+  var meta = {}, i = 0;
+  while (i < lines.length) {                // 머리말: "캐릭터: / 채팅방 이름: / 페르소나 이름:"
+    var t0 = lines[i].trim();
+    if (!t0) { i++; continue; }
+    var h = TURN_HDR_RE.exec(t0);
+    if (!h) break;
+    meta[h[1]] = h[2].trim(); i++;
+  }
+  var turns = [], intro = [], curNo = null, curUser = [], curChar = [], inChar = false;
+  function flushTurn() {
+    if (curNo === null) {
+      var ip = linesToParas(intro);
+      if (ip.length) turns.push({ no: null, seq: false, label: "시작", blocks: [{ role: "char", name: null, paras: ip }] });
+      intro = [];
+      return;
+    }
+    var blocks = [], up = linesToParas(curUser), cp = linesToParas(curChar);
+    if (up.length) blocks.push({ role: "user", name: null, paras: up });
+    if (cp.length) blocks.push({ role: "char", name: null, paras: cp });
+    if (blocks.length) turns.push({ no: curNo, seq: false, label: null, blocks: blocks });
+  }
+  for (; i < lines.length; i++) {
+    var line = rstrip(lines[i]), t = line.trim();
+    var tm = TURN_TAG_RE.exec(t);
+    if (tm) { flushTurn(); curNo = parseInt(tm[1], 10); curUser = []; curChar = []; inChar = false; continue; }
+    if (curNo === null) { intro.push(line); continue; }
+    if (!inChar && /^-{3,}$/.test(t)) { inChar = true; continue; }   // 첫 --- 아래가 캐릭터 응답
+    (inChar ? curChar : curUser).push(line);
+  }
+  flushTurn();
+  return { format: "turns", title: meta["채팅방 이름"] || "", character: meta["캐릭터"] || "",
+    persona: meta["페르소나 이름"] || meta["페르소나"] || "", date: "", turns: turns,
+    hasHud: HUD_TEST_RE.test(text) };
+}
+
+function parseGeneric(text) {
+  var det = detectWithVolume(text);
+  var chr = det.names[0] || "", per = det.names[1] || "";
+  var turns = parsePaste(text, [chr, per].filter(Boolean)).map(function (t) {
+    return { no: t.no, seq: false, label: t.label, blocks: t.blocks.map(function (b) {
+      var role = (per && b.speaker === per) ? "user" : ((chr && b.speaker === chr) ? "char" : "other");
+      return { role: role, name: b.speaker, paras: b.paras };
+    }) };
+  });
+  return { format: "generic", title: "", character: chr, persona: per, date: "",
+    turns: turns, hasHud: HUD_TEST_RE.test(text) };
+}
+
+function detectImportFormat(text) {
+  var lines = text.split("\n");
+  var head = lines.slice(0, 12).join("\n");
+  var nTurn = 0, nStamp = 0, nTag = 0, nSep = 0;
+  lines.forEach(function (l) {
+    var t = l.trim();
+    if (TURN_TAG_RE.test(t)) nTurn++;
+    else if (STAMP_HDR_RE.test(t)) nStamp++;
+    else if (CD_SEP_RE.test(t)) nSep++;
+    else if (CD_TAG_RE.test(t)) nTag++;
+  });
+  if (nTurn >= 1 || (/^캐릭터\s*[:：]/m.test(head) && /^페르소나(?: 이름)?\s*[:：]/m.test(head))) return "turns";
+  if (nStamp >= 1 || /^#\s*대화 내역/m.test(head)) return "stamped";
+  if (nSep >= 1 && nTag >= 1) return "caveduck";
+  return "generic";
+}
+
+function niceTitle(stem, character) {
+  var s = String(stem || "").replace(/_[0-9a-f]{6,}$/i, "").replace(/_+/g, " ").trim();
+  if (!s || /^(caveduck[ _-]?chat|chat|export|conversation|대화|채팅)\d*$/i.test(s)) return character || s || "기록";
+  return s;
+}
+
+function importStats(turns) {
+  var st = { numbered: 0, seq: 0, intro: 0, blocks: 0, chars: 0, min: null, max: null, users: 0, chars_: 0 };
+  turns.forEach(function (t) {
+    if (t.no !== null) {
+      st.numbered++;
+      st.min = st.min === null ? t.no : Math.min(st.min, t.no);
+      st.max = st.max === null ? t.no : Math.max(st.max, t.no);
+    } else if (t.seq) st.seq++;
+    else st.intro++;
+    t.blocks.forEach(function (b) {
+      st.blocks++;
+      if (b.role === "user") st.users++; else if (b.role === "char") st.chars_++;
+      b.paras.forEach(function (p) { st.chars += p.length; });
+    });
+  });
+  st.turns = st.numbered + st.seq;
+  return st;
+}
+
+function parseImportText(text, filename) {
+  text = normalizeImportText(text);
+  var fmt = detectImportFormat(text);
+  var r = fmt === "turns" ? parseTurnsFile(text)
+        : fmt === "stamped" ? parseStamped(text)
+        : fmt === "caveduck" ? parseCaveduck(text)
+        : parseGeneric(text);
+  r.formatLabel = IMPORT_FORMATS[r.format];
+  r.filename = String(filename || "");
+  r.stem = r.filename.replace(/\.[^.]+$/, "");
+  if (!r.title) r.title = niceTitle(r.stem, r.character);
+  r.stats = importStats(r.turns);
+  return r;
+}
+
+function stripHudParas(paras) {
+  return linesToParas(paras.join("\n\n").replace(HUD_RE, "").split("\n"));
+}
+
+/* 파싱 결과 + 이름/시작 번호 → 저장용 turns (serializeDoc이 받는 모양) */
+function materializeImport(parsed, opt) {
+  opt = opt || {};
+  var persona = (opt.persona || "").trim() || "나";
+  var character = (opt.character || "").trim() || "캐릭터";
+  var n = opt.startNo || 1;
+  var out = [];
+  parsed.turns.forEach(function (t) {
+    var no = t.no;
+    if (no === null && t.seq) no = n++;
+    var blocks = [];
+    t.blocks.forEach(function (b) {
+      var paras = b.paras;
+      if (opt.stripHud) paras = stripHudParas(paras);
+      paras = paras.map(guardPara).filter(function (p) { return p.trim(); });
+      if (!paras.length) return;
+      var sp = b.role === "user" ? persona : (b.role === "char" ? character : (b.name || null));
+      blocks.push({ speaker: sp, paras: paras });
+    });
+    if (blocks.length) out.push({ no: no, label: no === null ? (t.label || "기록") : null, blocks: blocks, seq: !!(t.seq) });
+  });
+  return out;
+}
+
+/* ---------------- 이어붙이기 계획: 이미 저장된 턴은 건너뛰고 새 턴만 ----------------
+   같은 채팅을 통째로 다시 올려도(1~50턴 동일 + 51턴 추가) 51턴 하나만 들어가도록,
+   턴을 "내용"으로 비교한다. 화자 이름은 비교에서 뺀다(기록마다 이름을 다르게 붙였을 수 있음).
+   - 번호 없는 형식(Caveduck·타임스탬프): 파일의 어느 턴이 기존 몇 턴과 같은지 찾아 번호를 맞춘다.
+   - 번호 같고 내용 같음 → 건너뜀
+   - 번호 같고, 기존 턴이 파일 턴의 앞부분과 정확히 일치(답변이 더 붙은 경우) → 파일 것으로 보강
+   - 번호 같고 내용 다름 → conflict 정책: keep(기존 유지, 기본) / replace(파일 내용으로 바꿈)
+   ---------------------------------------------------------------------------- */
+function blockPrints(t) {
+  return t.blocks.map(function (b) {
+    return b.paras.join("\n").replace(HUD_RE, "").replace(/\u200B/g, "").replace(/[\s\u00A0]+/g, " ").trim();
+  }).filter(function (s) { return s; });
+}
+function turnFingerprint(t) { return blockPrints(t).join("\u0001"); }
+
+function planAppend(oldTurns, incoming, opt) {
+  opt = opt || {};
+  var replacePolicy = opt.conflict === "replace";
+  var lockBelow = (opt.lockBelow === undefined || opt.lockBelow === null) ? null : opt.lockBelow;  // 분기 기록: 원본에서 물려받은 턴(no < lockBelow)은 절대 바꾸지 않음
+  var oldByNo = new Map(), oldFpNo = new Map(), oldUnnum = new Set();
+  var turnMax = null;
+  oldTurns.forEach(function (t) {
+    var fp = turnFingerprint(t);
+    if (t.no !== null) {
+      oldByNo.set(t.no, t);
+      if (fp && !oldFpNo.has(fp)) oldFpNo.set(fp, t.no);
+      turnMax = turnMax === null ? t.no : Math.max(turnMax, t.no);
+    } else {
+      oldUnnum.add(fp);
+    }
+  });
+
+  /* 번호 없는 형식: 처음으로 기존 턴과 내용이 같은 파일 턴을 찾아 오프셋을 정한다.
+     하나도 없으면 전부 새 내용 → 기존 마지막 턴 다음부터 */
+  var offset = null, seqStart = null;
+  incoming.forEach(function (t) {
+    if (!t.seq || t.no === null) return;
+    if (seqStart === null || t.no < seqStart) seqStart = t.no;
+    if (offset !== null) return;
+    var fp = turnFingerprint(t);
+    var n = fp ? oldFpNo.get(fp) : undefined;
+    if (n !== undefined) offset = n - t.no;
+  });
+  if (offset === null) offset = (turnMax === null ? 0 : turnMax) + 1 - (seqStart === null ? 1 : seqStart);
+
+  var out = oldTurns.slice();
+  var r = { merged: [], added: [], skipped: [], conflicts: [], replaced: [], extended: [],
+    introAdded: 0, introSkipped: 0, addedTurns: [], offset: offset, changed: false };
+
+  incoming.forEach(function (t) {
+    if (t.no === null) {
+      if (oldUnnum.has(turnFingerprint(t))) { r.introSkipped++; return; }
+      var nu = { no: null, label: t.label, blocks: t.blocks };
+      out.push(nu); r.introAdded++; r.addedTurns.push(nu);
+      return;
+    }
+    var no = t.seq ? t.no + offset : t.no;
+    var nt = { no: no, label: null, blocks: t.blocks };
+    var old = oldByNo.get(no);
+    if (!old) {
+      if (lockBelow !== null && no < lockBelow) { r.conflicts.push(no); return; }   // 원본 영역엔 새 턴을 끼워넣지 않음
+      out.push(nt); oldByNo.set(no, nt); r.added.push(no); r.addedTurns.push(nt);
+      return;
+    }
+    var ob = blockPrints(old), nb = blockPrints(nt);
+    var same = ob.length === nb.length && ob.every(function (s, i) { return s === nb[i]; });
+    if (same) { r.skipped.push(no); return; }
+    var locked = lockBelow !== null && no < lockBelow;
+    var extend = !locked && ob.length > 0 && ob.length < nb.length && ob.every(function (s, i) { return s === nb[i]; });
+    if (extend || (replacePolicy && !locked)) {
+      out[out.indexOf(old)] = nt; oldByNo.set(no, nt);
+      (extend ? r.extended : r.replaced).push(no); r.addedTurns.push(nt);
+      return;
+    }
+    r.conflicts.push(no);
+  });
+
+  var numbered = out.filter(function (t) { return t.no !== null; });
+  var unnum = out.filter(function (t) { return t.no === null; });
+  numbered.sort(function (a, b) { return a.no - b.no; });
+  r.merged = unnum.concat(numbered);
+  r.changed = !!(r.added.length || r.replaced.length || r.extended.length || r.introAdded);
+  return r;
+}
+
+/* ---------------- 업로드 분류: 이어붙이기 / 분기 / 재생성 / 수정 / 같음 / 무관 ----------------
+   plan은 conflict:"keep"으로 만든 것. 파일의 턴을 번호순으로 보면서
+   - 앞부분이 기존과 같고(prefix), 그 뒤가 전부 새 턴          → append
+   - 앞부분이 같고, 어느 턴(k)부터 끝까지 기존과 전부 다름     → branch(k)
+     · 다만 다른 턴이 기존 기록의 마지막 한 턴뿐이면            → regen(k) (답변 재생성으로 보고 교체 제안)
+   - 같은 턴과 다른 턴이 섞여 있음(중간 수정)                   → edits
+   - 전부 같음                                                  → same
+   - 겹치는 턴이 하나도 없음                                     → none
+   ---------------------------------------------------------------------------- */
+function classifyPlan(plan, incoming, existingMax) {
+  var inS = {}, inE = {}, inA = {}, inC = {};
+  plan.skipped.forEach(function (n) { inS[n] = 1; });
+  plan.extended.forEach(function (n) { inE[n] = 1; });
+  plan.added.forEach(function (n) { inA[n] = 1; });
+  plan.conflicts.forEach(function (n) { inC[n] = 1; });
+  var targets = [];
+  incoming.forEach(function (t) {
+    if (t.no === null) return;
+    targets.push(t.seq ? t.no + plan.offset : t.no);
+  });
+  targets.sort(function (a, b) { return a - b; });
+  var matched = plan.skipped.length + plan.extended.length;
+  if (!targets.length || !matched) return { kind: "none", at: null, prefix: 0 };
+
+  var prefix = 0, k = null;
+  for (var i = 0; i < targets.length; i++) {
+    var n = targets[i];
+    if (inS[n] || inE[n]) { if (k === null) prefix++; continue; }
+    if (k === null) k = n;
+  }
+  if (k === null) return { kind: plan.changed ? "append" : "same", at: null, prefix: prefix };
+  if (!prefix) return { kind: "none", at: null, prefix: 0 };
+
+  var laterMatch = targets.some(function (n) { return n > k && (inS[n] || inE[n]); });
+  if (laterMatch) return { kind: "edits", at: k, prefix: prefix };
+  if (!plan.conflicts.length) return { kind: "append", at: k, prefix: prefix };
+  var diverged = plan.conflicts.filter(function (n) { return n >= k; }).length;
+  if (diverged === 1 && existingMax !== null && existingMax !== undefined && k === existingMax) {
+    return { kind: "regen", at: k, prefix: prefix };
+  }
+  return { kind: "branch", at: k, prefix: prefix, diverged: diverged };
+}
+
+/* 계획을 사람 말로 */
+function describePlan(r) {
+  var parts = [];
+  function rng(arr) {
+    var a = arr.slice().sort(function (x, y) { return x - y; });
+    if (!a.length) return "";
+    var s = a[0] + "턴";
+    if (a.length > 1) s = (a[a.length - 1] - a[0] === a.length - 1) ? a[0] + "~" + a[a.length - 1] + "턴" : a.slice(0, 5).join(", ") + (a.length > 5 ? "…" : "") + "턴";
+    return s;
+  }
+  if (r.added.length) parts.push("새 턴 " + r.added.length + "개(" + rng(r.added) + ")를 이어붙여요");
+  if (r.extended.length) parts.push(r.extended.length + "개 턴(" + rng(r.extended) + ")은 답변이 더 붙어 있어 파일 것으로 보강해요");
+  if (r.replaced.length) parts.push(r.replaced.length + "개 턴(" + rng(r.replaced) + ")은 파일 내용으로 바꿔요");
+  if (r.introAdded) parts.push("시작 메시지를 추가해요");
+  if (r.skipped.length) parts.push("이미 있는 " + r.skipped.length + "개 턴(" + rng(r.skipped) + ")은 건너뛰어요");
+  if (r.introSkipped) parts.push("시작 메시지는 이미 있어요");
+  if (r.conflicts.length) parts.push("번호는 같지만 내용이 다른 " + r.conflicts.length + "개 턴(" + rng(r.conflicts) + ")은 기존 것을 그대로 둬요");
+  if (!parts.length) return "새로 추가될 내용이 없어요.";
+  return parts.join(" · ") + ".";
+}
+
 /* ---------------- export ---------------- */
 var CORE = {
   APP_NAME: APP_NAME, META_KEYS: META_KEYS, PAGE_TURNS: PAGE_TURNS,
@@ -748,13 +1251,18 @@ var CORE = {
   labelRegex: labelRegex, detectNames: detectNames,
   parsePaste: parsePaste, parseBody: parseBody, mergeTurns: mergeTurns,
   parseFrontmatter: parseFrontmatter, serializeDoc: serializeDoc,
-  slugify: slugify, cleanFolder: cleanFolder, docIdValid: docIdValid,
+  slugify: slugify, cleanFolder: cleanFolder, docIdValid: docIdValid, baseId: baseId,
   mtimeFromId: mtimeFromId, docFromText: docFromText,
   allFolders: allFolders, allTags: allTags, allCharacters: allCharacters,
   searchDocs: searchDocs, makeSnippet: makeSnippet,
   renderLine: renderLine, renderTurns: renderTurns, metaLine: metaLine,
   detectWithVolume: detectWithVolume, parsePayload: parsePayload,
   normalizeTags: normalizeTags,
+  IMPORT_FORMATS: IMPORT_FORMATS,
+  detectImportFormat: detectImportFormat, parseImportText: parseImportText,
+  materializeImport: materializeImport, importStats: importStats,
+  planAppend: planAppend, describePlan: describePlan, turnFingerprint: turnFingerprint,
+  classifyPlan: classifyPlan,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = CORE;
@@ -991,7 +1499,8 @@ function onProgress() {
 function formIsOpen() {
   return !!(document.getElementById("caps") ||
             document.getElementById("text") ||
-            document.getElementById("raw"));
+            document.getElementById("raw") ||
+            document.getElementById("imp-drop"));
 }
 
 function syncIndex(force) {
@@ -1161,8 +1670,17 @@ async function saveNew(payload) {
     tags: C.normalizeTags(payload.tags || ""),
     source: "paste",
   };
+  var turns = pl.turns;
+  if (payload.branch_of && payload.branch_at) {   // 분기: 번호 없는 턴은 갈라진 턴부터 차례로 번호를 매긴다
+    meta.branch_of = payload.branch_of;
+    meta.branch_at = String(payload.branch_at);
+    var n = payload.branch_at;
+    turns = turns.map(function (t) { return t.no === null ? { no: n++, label: null, blocks: t.blocks } : t; });
+    turns.sort(function (a, b) { return a.no - b.no; });
+    if (turns.length && turns[0].no < payload.branch_at) throw UErr("분기는 " + payload.branch_at + "턴부터 시작해야 해요. 그 앞의 턴은 원본에 있어요.");
+  }
   var id = newDocId(title, folder);
-  var content = C.serializeDoc(meta, pl.turns);
+  var content = C.serializeDoc(meta, turns);
   var sha = await putFile("data/" + id + ".md", content, { message: "저장: " + title });
   applyLocal(id, content, sha);
   return id;
@@ -1183,6 +1701,160 @@ async function saveAppend(appendId, payload) {
     { sha: latest.sha, message: "이어붙임: " + (meta.title || appendId) });
   applyLocal(appendId, content, sha);
   return appendId;
+}
+
+/* ---------------- 분기 (branch_of / branch_at) ----------------
+   분기 기록은 갈라진 턴(branch_at)부터 자기 턴만 갖고, 앞부분은 원본 기록에서 가져와 이어 붙인다. */
+function parentOf(d) {
+  if (!d || !d.branchOf) return null;
+  var found = null;
+  S.index.forEach(function (x) { if (!found && C.baseId(x.id) === d.branchOf) found = x; });
+  return found;
+}
+function childrenOf(d) {
+  var base = C.baseId(d.id), kids = [];
+  S.index.forEach(function (x) { if (x.branchOf === base && x !== d) kids.push(x); });
+  kids.sort(function (a, b) { return (a.branchAt || 0) - (b.branchAt || 0) || (a.mtime || 0) - (b.mtime || 0); });
+  return kids;
+}
+/* 원본에서 물려받는 앞부분(inh: true 표시) + 자기 턴. 순환 참조는 끊는다 */
+function inheritedTurns(d, seen) {
+  seen = seen || {};
+  if (!d || d.branchAt === null || d.branchAt === undefined || seen[d.id]) return [];
+  seen[d.id] = 1;
+  var parent = parentOf(d);
+  if (!parent) return [];
+  var at = d.branchAt;
+  return assembleFull(parent, seen).filter(function (t) { return t.no === null || t.no < at; })
+    .map(function (t) { return { no: t.no, label: t.label, blocks: t.blocks, inh: true }; });
+}
+function assembleFull(d, seen) {
+  var own = d.turns.map(function (t) { return { no: t.no, label: t.label, blocks: t.blocks, inh: false }; });
+  if (d.branchAt === null || d.branchAt === undefined) return own;
+  var inh = inheritedTurns(d, seen);
+  var numbered = inh.concat(own).filter(function (t) { return t.no !== null; });
+  var unnum = inh.concat(own).filter(function (t) { return t.no === null; });
+  numbered.sort(function (a, b) { return a.no - b.no; });
+  return unnum.concat(numbered);
+}
+function turnMaxOf(turns) {
+  var m = null;
+  turns.forEach(function (t) { if (t.no !== null) m = m === null ? t.no : Math.max(m, t.no); });
+  return m;
+}
+
+/* ---- 파일 백업 저장: 파서가 만든 turns를 그대로 저장 (붙여넣기 재파싱을 거치지 않는다) ---- */
+async function saveImportedNew(meta, turns) {
+  if (!turns.length) throw UErr("저장할 대화를 찾지 못했어요.");
+  var title = (meta.title || "").trim();
+  if (!title) throw UErr("제목을 입력해 주세요.");
+  var folder = C.cleanFolder(meta.folder || "");
+  var m = {
+    title: title,
+    character: (meta.character || "").trim(),
+    persona: (meta.persona || "").trim(),
+    date: (meta.date || "").trim() || todayISO(),
+    tags: C.normalizeTags(meta.tags || ""),
+    source: meta.source || "file",
+    branch_of: meta.branch_of || "",
+    branch_at: meta.branch_at ? String(meta.branch_at) : "",
+  };
+  var id = newDocId(title, folder);
+  var content = C.serializeDoc(m, turns);
+  var sha = await putFile("data/" + id + ".md", content, { message: (m.branch_of ? "분기 저장: " : "파일 백업: ") + title });
+  applyLocal(id, content, sha);
+  return id;
+}
+
+/* 이어붙이기: 항상 GitHub의 최신본을 기준으로 이름표를 정하고, 이미 있는 턴은 건너뛴다.
+   분기 기록이면 원본 앞부분까지 이어 붙인 전체와 비교하되, 원본 영역은 건드리지 않고 자기 턴만 쓴다.
+   돌려주는 값: { id, plan, wrote } — 새 내용이 없으면 GitHub에 쓰지 않는다 */
+async function saveImportedAppend(appendId, parsed, opt) {
+  opt = opt || {};
+  var latest = await refreshOne(appendId);
+  if (!latest) throw UErr("이어붙일 기록을 찾을 수 없어요.");
+  var text = latest.text.replace(/\r\n/g, "\n");
+  var cur = C.docFromText(appendId, text, { sha: latest.sha });
+  var meta = cur.meta;
+  var full = assembleFull(cur);
+  var turns = C.materializeImport(parsed, {
+    character: meta.character, persona: meta.persona, startNo: 1, stripHud: !!opt.stripHud,
+  });
+  if (!turns.length) throw UErr("저장할 대화를 찾지 못했어요.");
+  var plan = C.planAppend(full, turns, { conflict: opt.conflict, lockBelow: cur.branchAt });
+  if (!plan.changed) return { id: appendId, plan: plan, wrote: false };
+  var own = plan.merged.filter(function (t) { return !t.inh; });
+  var content = C.serializeDoc(meta, own);
+  var sha = await putFile("data/" + appendId + ".md", content,
+    { sha: latest.sha, message: "파일 이어붙임: " + (meta.title || appendId) });
+  applyLocal(appendId, content, sha);
+  return { id: appendId, plan: plan, wrote: true };
+}
+
+/* 분기로 저장: 원본(parentId)의 at턴부터 갈라진 새 기록을 만든다. 파일의 at턴 이후만 저장. */
+async function saveImportedBranch(parentId, parsed, opt) {
+  opt = opt || {};
+  var latest = await refreshOne(parentId);
+  if (!latest) throw UErr("원본 기록을 찾을 수 없어요.");
+  var parent = C.docFromText(parentId, latest.text.replace(/\r\n/g, "\n"), { sha: latest.sha });
+  var full = assembleFull(parent);
+  var turns = C.materializeImport(parsed, {
+    character: parent.meta.character, persona: parent.meta.persona, startNo: 1, stripHud: !!opt.stripHud,
+  });
+  var plan = C.planAppend(full, turns, { conflict: "keep" });
+  var cls = C.classifyPlan(plan, turns, turnMaxOf(full));
+  var at = opt.at || cls.at;
+  if (!at) throw UErr("어디서 갈라지는지 찾지 못했어요. 원본과 다른 턴이 없어요.");
+  var own = [];
+  turns.forEach(function (t) {
+    if (t.no === null) return;                         // 시작 메시지는 원본 것
+    var no = t.seq ? t.no + plan.offset : t.no;
+    if (no >= at) own.push({ no: no, label: null, blocks: t.blocks });
+  });
+  if (!own.length) throw UErr("분기로 저장할 턴이 없어요.");
+  var title = (opt.title || "").trim() || ((parent.meta.title || "기록") + " · " + at + "턴 분기");
+  var id = await saveImportedNew({
+    title: title, character: parent.meta.character, persona: parent.meta.persona,
+    date: opt.date || "", folder: parent.folder, tags: opt.tags || "",
+    source: "file:" + parsed.format, branch_of: C.baseId(parentId), branch_at: at,
+  }, own);
+  return { id: id, at: at, count: own.length, plan: plan };
+}
+
+/* 통파일 업로드 자동 분류: 모든 기록과 내용을 비교해 가장 많이 겹치는 기록을 찾고,
+   이어붙이기인지 분기인지 정한다. 결과: { doc, plan, cls } 또는 doc=null */
+function analyzeUpload(parsed, stripHud) {
+  var best = null;
+  S.index.forEach(function (d) {
+    if (parsed.character && (d.meta.character || "").trim() && (d.meta.character || "").trim() !== parsed.character.trim()) return;
+    var full = assembleFull(d);
+    var turns = C.materializeImport(parsed, {
+      character: d.meta.character, persona: d.meta.persona, startNo: 1, stripHud: !!stripHud,
+    });
+    if (!turns.length) return;
+    var plan = C.planAppend(full, turns, { conflict: "keep", lockBelow: d.branchAt });
+    var cls = C.classifyPlan(plan, turns, turnMaxOf(full));
+    if (cls.kind === "none") return;
+    var score = plan.skipped.length + plan.extended.length;
+    var isRoot = d.branchAt === null || d.branchAt === undefined;
+    if (!best || score > best.score ||
+        (score === best.score && ((isRoot && !best.isRoot) || (isRoot === best.isRoot && (d.mtime || 0) > (best.doc.mtime || 0))))) {
+      best = { doc: d, plan: plan, cls: cls, score: score, isRoot: isRoot, turns: turns };
+    }
+  });
+  if (best) return best;
+  /* 내용이 겹치는 기록이 없으면 같은 제목의 기록에 이어붙이기 (뒷부분만 따로 내보낸 파일) */
+  var title = (parsed.title || "").trim(), chr = (parsed.character || "").trim(), byTitle = null;
+  if (title) S.index.forEach(function (d) {
+    if ((d.meta.title || "").trim() !== title) return;
+    if (chr && (d.meta.character || "").trim() !== chr) return;
+    if (!byTitle || (d.mtime || 0) > (byTitle.mtime || 0)) byTitle = d;
+  });
+  if (!byTitle) return null;
+  var full2 = assembleFull(byTitle);
+  var turns2 = C.materializeImport(parsed, { character: byTitle.meta.character, persona: byTitle.meta.persona, startNo: 1, stripHud: !!stripHud });
+  var plan2 = C.planAppend(full2, turns2, { conflict: "keep", lockBelow: byTitle.branchAt });
+  return { doc: byTitle, plan: plan2, cls: C.classifyPlan(plan2, turns2, turnMaxOf(full2)), score: 0, isRoot: true, turns: turns2, byTitle: true };
 }
 
 async function updateDoc(id, raw, newFolder) {
@@ -1307,15 +1979,27 @@ function pageList(params) {
   C.allTags(scoped).forEach(function (kv) { chips.push(chip("#" + kv[0], "tag", kv[0], tag, kv[1])); });
   var chipsHtml = chips.length ? '<div class="chips">' + chips.join("") + "</div>" : "";
 
+  function branchRows(d, depth) {
+    var kids = childrenOf(d);
+    if (!kids.length) return "";
+    return kids.map(function (k) {
+      return '<a class="doc sub" style="margin-left:' + (18 * depth) + 'px" href="#/view?id=' + encodeURIComponent(k.id) + "&t=" + k.branchAt + '">' +
+        '<span class="arrow">↳</span> <b>' + k.branchAt + "턴부터</b> " + esc(k.meta.title || k.id) +
+        '<span class="submeta">' + (k.turn_max !== null ? "~" + k.turn_max + "턴 · " : "") + k.n_turns + "개 · " + C.fmtNum(k.chars) + "자" +
+        (k.meta.date ? " · " + esc(k.meta.date) : "") + "</span></a>" + branchRows(k, depth + 1);
+    }).join("");
+  }
   function docRow(row, showFolder) {
     var d = row.d, meta = d.meta;
     var title = meta.title || row.id;
     var snip = q ? C.makeSnippet(d.body, q, row.pos) : C.makeSnippet(d.body, "", -1);
     var fb = (showFolder && d.folder) ? '<span class="fold">' + esc(d.folder) + "</span>" : "";
-    return '<a class="doc" href="#/view?id=' + encodeURIComponent(row.id) + '">' +
+    var parent = parentOf(d);
+    var pb = parent ? '<span class="fold branch">↳ 「' + esc(parent.meta.title || parent.id) + "」 " + d.branchAt + "턴 분기</span>" : "";
+    return '<a class="doc" href="#/view?id=' + encodeURIComponent(row.id) + (parent ? "&t=" + d.branchAt : "") + '">' +
       "<h3>" + esc(title) + "</h3>" +
-      '<div class="meta">' + fb + C.metaLine(meta, d) + "</div>" +
-      '<div class="snip">' + snip + "</div></a>";
+      '<div class="meta">' + fb + pb + C.metaLine(meta, d) + "</div>" +
+      '<div class="snip">' + snip + "</div></a>" + branchRows(d, 1);
   }
 
   var parts = [];
@@ -1357,12 +2041,17 @@ function pageList(params) {
     sectionTitle = "미분류";
   }
 
+  var shown = {};
+  rows.forEach(function (r) { shown[C.baseId(r.id)] = 1; });
+  var nested = rows.filter(function (r) { return r.d.branchOf && shown[r.d.branchOf]; });
+  rows = rows.filter(function (r) { return !(r.d.branchOf && shown[r.d.branchOf]); });
   var docsHtml = rows.map(function (r) { return docRow(r, !inFolder); });
 
   if (docsHtml.length) {
     var totalChars = 0;
     rows.forEach(function (r) { totalChars += r.d.chars; });
-    var label = rows.length + "개 기록 · 약 " + C.fmtNum(totalChars) + "자";
+    nested.forEach(function (r) { totalChars += r.d.chars; });
+    var label = rows.length + "개 기록" + (nested.length ? " (분기 " + nested.length + "개)" : "") + " · 약 " + C.fmtNum(totalChars) + "자";
     if (sectionTitle) {
       parts.push('<h2 class="shelf-h">' + sectionTitle + ' <span class="sub">· ' + label + "</span></h2>");
     } else {
@@ -1375,14 +2064,16 @@ function pageList(params) {
     } else if (inFolder) {
       parts.push('<div class="empty"><b>이 서가는 아직 비어 있어요</b>새 기록을 저장할 때 이 폴더를 지정하면 여기에 꽂힙니다.</div>');
     } else if (!foldList.length) {
-      parts.push('<div class="empty"><b>아직 저장된 기록이 없어요</b>오른쪽 위 <b>새 기록</b>을 눌러 채팅을 붙여넣으면 여기에 쌓입니다.</div>');
+      parts.push('<div class="empty"><b>아직 저장된 기록이 없어요</b>오른쪽 위 <b>새 기록</b>을 눌러 채팅을 붙여넣거나, <b>파일 백업</b>에 내보내기 txt를 올리면 여기에 쌓입니다.</div>');
     }
   }
 
   var newHref = "#/new" + (inFolder ? qs({ folder: folder }) : "");
+  var impHref = "#/import" + (inFolder ? qs({ folder: folder }) : "");
   var top =
     '<button class="btn small" id="btn-sync" title="GitHub와 동기화"' + (S.syncing ? " disabled" : "") + ">" + (S.syncing ? "…" : "↻") + "</button>" +
     '<button class="btn small" id="btn-backup" title="모든 기록을 zip으로 저장">전체 백업</button>' +
+    '<a class="btn small" href="' + impHref + '" title="txt 내보내기 파일을 올려 자동으로 저장">파일 백업</a>' +
     '<a class="btn primary small" href="' + newHref + '">＋ 새 기록</a>' +
     '<a class="btn small" href="#/settings" title="설정">⚙</a>';
   layout(folder || "서재", parts.join("\n"), top);
@@ -1468,11 +2159,22 @@ function pageView(params) {
   var title = meta.title || id;
   var qid = encodeURIComponent(id);
 
-  var turns = d.turns;
+  var parent = parentOf(d);
+  var kids = childrenOf(d);
+  var isBranch = d.branchAt !== null && d.branchAt !== undefined;
+  var turns = assembleFull(d);               // 분기면 원본 앞부분(inh) + 자기 턴
   var total = turns.length;
   var pages = Math.max(1, Math.ceil(total / PAGE_TURNS));
-  var p = parseInt(params.get("p") || "1", 10);
-  if (isNaN(p)) p = 1;
+  function pageOfTurn(no) {
+    var gi = -1;
+    turns.some(function (t, i) { if (t.no === no) { gi = i; return true; } return false; });
+    return gi < 0 ? null : Math.floor(gi / PAGE_TURNS) + 1;
+  }
+  var p = parseInt(params.get("p") || "", 10);
+  if (isNaN(p)) {                            // p가 없으면: t가 있으면 그 턴의 쪽, 분기면 갈라진 턴의 쪽
+    var tq = parseInt(params.get("t") || "", 10);
+    p = (!isNaN(tq) && pageOfTurn(tq)) || (isBranch && pageOfTurn(d.branchAt)) || 1;
+  }
   p = Math.min(Math.max(p, 1), pages);
   var chunk = turns.slice((p - 1) * PAGE_TURNS, p * PAGE_TURNS);
 
@@ -1511,6 +2213,7 @@ function pageView(params) {
 
   var top = '<div class="readerbar">' + turnSel +
     '<a class="btn small" href="#/new?append=' + qid + '">이어붙이기</a>' +
+    '<button class="btn small" id="btn-branch" title="이 기록의 어느 턴부터 갈라지는 분기를 붙여넣기로 만들어요">분기 만들기</button>' +
     '<a class="btn small" href="#/edit?id=' + qid + '">편집</a>' +
     '<button class="btn small" id="btn-raw">.md</button></div>';
 
@@ -1556,12 +2259,41 @@ function pageView(params) {
       "</div></div>";
   }
 
+  /* 분기 이동: 원본에서는 갈라진 턴 아래에 분기 링크, 분기에서는 갈라진 턴에 원본 링크 */
+  var links = {};
+  kids.forEach(function (k) {
+    if (k.branchAt === null) return;
+    (links[k.branchAt] = links[k.branchAt] || []).push({
+      href: "#/view?id=" + encodeURIComponent(k.id) + "&t=" + k.branchAt,
+      label: "여기서 분기 「" + (k.meta.title || k.id) + "」",
+      note: k.branchAt + "~" + (k.turn_max !== null ? k.turn_max : k.branchAt) + "턴 · " + k.n_turns + "개",
+    });
+  });
+  var branchNote = "";
+  if (isBranch) {
+    var pl = parent ? ("「" + esc(parent.meta.title || parent.id) + "」") : "원본";
+    var phref = parent ? "#/view?id=" + encodeURIComponent(parent.id) + "&t=" + d.branchAt : "";
+    (links[d.branchAt] = links[d.branchAt] || []).unshift({
+      href: phref || "#", cls: "up",
+      label: "여기부터 이 분기의 내용 — " + (parent ? "원본 " + (parent.meta.title || parent.id) + "의 " + d.branchAt + "턴으로" : "원본 기록을 찾을 수 없어요"),
+    });
+    branchNote = '<div class="notice branch-note">' + pl + "의 <b>" + d.branchAt + "턴</b>에서 갈라진 분기예요. " +
+      (parent ? "앞의 1~" + (d.branchAt - 1) + "턴은 원본 그대로 이어서 보여드려요. " +
+        '<a href="' + phref + '">원본에서 보기</a>' : "원본 기록이 없어서 " + d.branchAt + "턴부터만 보여요.") + "</div>";
+  } else if (kids.length) {
+    branchNote = '<div class="notice branch-note">이 기록에서 갈라진 분기 ' + kids.length + "개: " +
+      kids.map(function (k) {
+        return '<a href="#/view?id=' + encodeURIComponent(k.id) + "&t=" + k.branchAt + '">' + esc(k.meta.title || k.id) + "</a> (" + k.branchAt + "턴~)";
+      }).join(" · ") + "</div>";
+  }
+
   var body =
     '<div class="reader-head"><h1>' + esc(title) + "</h1>" +
     '<div class="meta">' + foldHtml + C.metaLine(meta, d) + "</div></div>" +
+    branchNote +
     searchHtml +
     '<div class="reader">' + navHtml +
-    C.renderTurns(chunk, persona, character) +
+    C.renderTurns(chunk, persona, character, { links: links }) +
     navHtml +
     '<hr class="endmark">' +
     '<p class="backline"><a class="btn small" href="#/">← 서재로</a></p></div>' +
@@ -1572,6 +2304,14 @@ function pageView(params) {
   if (jump) jump.addEventListener("change", function () { if (this.value) go(this.value); });
   $("btn-raw").addEventListener("click", function () {
     downloadText(id.split("/").pop() + ".md", d.raw);
+  });
+  $("btn-branch").addEventListener("click", function () {
+    var last = d.turn_max !== null ? d.turn_max : (isBranch ? d.branchAt : 1);
+    var v = prompt("몇 턴부터 갈라지나요? (그 턴부터 새로 붙여넣게 돼요)", String(last));
+    if (v === null) return;
+    var no = parseInt(v, 10);
+    if (isNaN(no) || no < 1) { alert("턴 번호를 숫자로 적어주세요."); return; }
+    go("/new?branch=" + qid + "&at=" + no);
   });
 
   /* 턴 번호로 이동 */
@@ -1657,6 +2397,17 @@ function pageNew(params) {
   var meta = { title: "", character: "", persona: "", date: todayISO(), tags: "" };
   var startNo = 1;
   var appendInfo = "";
+  var branchId = params.get("branch") || "", branchAt = parseInt(params.get("at") || "", 10);
+  var branchDoc = branchId ? S.index.get(branchId) : null;
+  if (branchDoc && !isNaN(branchAt) && branchAt >= 1) {
+    meta.character = branchDoc.meta.character || "";
+    meta.persona = branchDoc.meta.persona || "";
+    meta.title = (branchDoc.meta.title || "기록") + " · " + branchAt + "턴 분기";
+    folderVal = branchDoc.folder;
+    startNo = branchAt;
+    appendInfo = '<div class="notice">「' + esc(branchDoc.meta.title || branchId) + "」의 <b>" + branchAt + "턴</b>에서 갈라지는 분기를 만들어요. " +
+      branchAt + "턴부터 붙여넣으면 됩니다. 앞의 턴은 저장하지 않고 원본을 이어서 보여줘요.</div>";
+  } else { branchId = ""; branchDoc = null; }
   if (appendId) {
     var ad = S.index.get(appendId);
     if (ad) {
@@ -1675,18 +2426,19 @@ function pageNew(params) {
     return '<option value="' + esc(kv[0]) + '">';
   }).join("");
   var ro = appendId ? "readonly" : "";
+  var roB = (appendId || branchDoc) ? "readonly" : "";
 
   var body =
     '<div class="panel">' +
-    "<h2>" + (appendId ? "기록 이어붙이기" : "새 기록 저장") + "</h2>" +
+    "<h2>" + (appendId ? "기록 이어붙이기" : (branchDoc ? "분기 만들기" : "새 기록 저장")) + "</h2>" +
     appendInfo +
     '<div class="grid2">' +
     '<div class="field"><label>제목</label><input type="text" id="title" value="' + esc(meta.title) + '" ' + ro + ' placeholder="예: 글로리아 1부"></div>' +
     '<div class="field"><label>날짜</label><input type="date" id="date" value="' + esc(meta.date) + '" ' + ro + "></div>" +
-    '<div class="field"><label>캐릭터 이름 (AI 응답)</label><input type="text" id="character" value="' + esc(meta.character) + '" ' + ro + ' placeholder="예: 한서"></div>' +
-    '<div class="field"><label>내 이름 (내가 친 입력)</label><input type="text" id="persona" value="' + esc(meta.persona) + '" ' + ro + ' placeholder="예: 글로리아"></div>' +
+    '<div class="field"><label>캐릭터 이름 (AI 응답)</label><input type="text" id="character" value="' + esc(meta.character) + '" ' + roB + ' placeholder="예: 한서"></div>' +
+    '<div class="field"><label>내 이름 (내가 친 입력)</label><input type="text" id="persona" value="' + esc(meta.persona) + '" ' + roB + ' placeholder="예: 글로리아"></div>' +
     '<div class="field"><label>폴더 (서가)</label>' +
-    '<input type="text" id="folder" list="folder-list" value="' + esc(folderVal) + '" ' + ro + ' placeholder="예: 한서 · 비우면 미분류">' +
+    '<input type="text" id="folder" list="folder-list" value="' + esc(folderVal) + '" ' + roB + ' placeholder="예: 한서 · 비우면 미분류">' +
     '<datalist id="folder-list">' + folderOpts + "</datalist></div>" +
     '<div class="field"><label>태그 (쉼표로 구분)</label><input type="text" id="tags" value="' + esc(meta.tags) + '" placeholder="예: 로판, 글로리아"></div>' +
     "</div>" +
@@ -1699,7 +2451,8 @@ function pageNew(params) {
     '<div class="hint" style="margin-top:8px">턴 번호는 자동으로 이어져요. <b>이름:</b> 같은 이름표는 저장할 때 알아서 붙으니 내용만 적으면 됩니다.</div></div>' +
     '<div id="mode-paste" style="display:none"><div class="field"><label>붙여넣기</label>' +
     '<textarea id="text" rows="14" placeholder="채팅을 통째로 붙여넣으세요.&#10;&#10;56턴&#10;글로리아: …&#10;한서: …&#10;&#10;이런 형식이면 턴과 화자를 자동으로 나눠요."></textarea>' +
-    '<div class="hint" id="detect-hint">붙여넣으면 화자 이름과 턴 수를 자동으로 감지합니다.</div></div></div>' +
+    '<div class="hint" id="detect-hint">붙여넣으면 화자 이름과 턴 수를 자동으로 감지합니다.</div>' +
+    '<div class="hint">내보내기 txt 파일이 있다면 <a href="#/import" style="color:var(--gold);text-decoration:underline">파일 백업</a>에 올리는 게 더 정확해요 (Caveduck · 타임스탬프 · [턴 N] 형식 자동 감지).</div></div></div>' +
     '<div class="actions">' +
     '<button class="btn" id="btn-preview">미리보기</button>' +
     '<button class="btn primary" id="btn-save">저장</button>' +
@@ -1708,7 +2461,7 @@ function pageNew(params) {
     '<div class="panel" id="pv-panel" style="display:none"><h2>미리보기</h2><div id="preview"></div>' +
     '<div class="pv-note">저장한 뒤에도 <b>편집</b> 화면에서 자유롭게 고칠 수 있어요.</div></div>';
 
-  layout(appendId ? "기록 이어붙이기" : "새 기록", body, '<a class="btn small" href="#/">서재로</a>');
+  layout(appendId ? "기록 이어붙이기" : (branchDoc ? "분기 만들기" : "새 기록"), body, '<a class="btn small" href="#/">서재로</a>');
 
   var MODE = "caps";
   var detectTimer = null;
@@ -1785,7 +2538,7 @@ function pageNew(params) {
     var text = $("text").value;
     if (!text.trim()) return;
     var res = C.detectWithVolume(text);
-    if (!appendId) {
+    if (!appendId && !branchDoc) {
       if (res.names[0] && !$("character").value) $("character").value = res.names[0];
       if (res.names[1] && !$("persona").value) $("persona").value = res.names[1];
       if (!$("folder").value && $("character").value) $("folder").value = $("character").value;
@@ -1828,6 +2581,7 @@ function pageNew(params) {
       text: text, title: $("title").value, date: $("date").value,
       character: $("character").value.trim(), persona: $("persona").value.trim(),
       folder: $("folder").value.trim(), tags: $("tags").value, append_id: appendId,
+      branch_of: branchDoc ? C.baseId(branchDoc.id) : "", branch_at: branchDoc ? branchAt : 0,
     };
   }
 
@@ -1877,6 +2631,454 @@ function pageNew(params) {
   });
 }
 
+/* ---------------- 페이지: 파일 백업 (txt 자동 감지) ---------------- */
+var LS_IMP_AUTO = "archive-import-auto";
+var IMP = { items: [], seq: 0, onFiles: null, busy: false };
+var PREVIEW_TURNS = 6;
+
+/* 파일 → 문자열. UTF-8로 못 읽으면 EUC-KR로 한 번 더 시도 */
+function readFileText(file) {
+  return new Promise(function (resolve, reject) {
+    var r = new FileReader();
+    r.onload = function () {
+      var buf = r.result, text;
+      try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+      catch (e) {
+        try { text = new TextDecoder("euc-kr").decode(buf); }
+        catch (e2) { text = new TextDecoder("utf-8").decode(buf); }
+      }
+      resolve(text);
+    };
+    r.onerror = function () { reject(r.error || new Error("read error")); };
+    r.readAsArrayBuffer(file);
+  });
+}
+
+function pageImport(params) {
+  if (!S.index.size && (S.syncing || !S.loaded)) { loadingScreen(); return; }
+
+  var folderDefault = C.cleanFolder(params.get("folder") || "");
+  var autoOn = false;
+  try { autoOn = localStorage.getItem(LS_IMP_AUTO) === "1"; } catch (e) {}
+  IMP.items = [];
+
+  var body =
+    '<div class="panel"><h2>파일로 백업</h2>' +
+    '<div class="drop" id="imp-drop" tabindex="0" role="button" aria-label="txt 파일 올리기">' +
+    '<input type="file" id="imp-file" multiple accept=".txt,.md,.log,text/plain,text/markdown" style="display:none">' +
+    "<b>txt 파일을 여기에 끌어다 놓으세요</b>" +
+    '<span>또는 <span class="link">파일 선택</span> — 여러 개를 한 번에 올려도 돼요</span></div>' +
+    '<div class="hint">Caveduck 내보내기(<code>[나]</code> / <code>----</code>), 타임스탬프 대화 내역(<code>[날짜] 이름:</code>), ' +
+    "<code>[턴 N]</code> 기록 — 세 가지를 자동으로 알아보고 캐릭터·내 이름·제목·턴을 채워요. " +
+    "그 밖의 파일은 통짜 붙여넣기와 같은 방식으로 읽습니다. " +
+    "같은 채팅을 통째로 다시 올리면 이미 저장된 턴은 건너뛰고 <b>새 턴만</b> 이어붙이고, " +
+    "앞부분은 같은데 어느 턴부터 내용이 달라지면 그 턴부터 <b>분기</b>로 따로 저장해요.</div>" +
+    '<label class="chk"><input type="checkbox" id="imp-auto"' + (autoOn ? " checked" : "") +
+    "> 올리자마자 바로 저장 (검토 없이 — 자동으로 정한 방법대로)</label>" +
+    "</div>" +
+    '<div id="imp-list"></div>' +
+    '<div class="actions" id="imp-actions" style="display:none">' +
+    '<button class="btn primary" id="imp-saveall">모두 저장</button>' +
+    '<a class="btn" href="#/">서재로</a>' +
+    '<span class="pv-note" id="imp-msg"></span></div>';
+
+  layout("파일 백업", body, '<a class="btn small" href="#/">서재로</a>');
+
+  var drop = $("imp-drop"), input = $("imp-file"), list = $("imp-list");
+
+  function targetOptions() {
+    var rows = Array.from(S.index.values());
+    rows.sort(function (a, b) {
+      var ta = (a.folder ? a.folder + "/" : "") + (a.meta.title || a.id);
+      var tb = (b.folder ? b.folder + "/" : "") + (b.meta.title || b.id);
+      return ta < tb ? -1 : (ta > tb ? 1 : 0);
+    });
+    return rows.map(function (d) {
+      var lab = (d.folder ? d.folder + " / " : "") + (d.meta.title || d.id) +
+        (d.turn_max !== null ? " (~" + d.turn_max + "턴)" : "");
+      return '<option value="' + esc(d.id) + '">' + esc(lab) + "</option>";
+    }).join("");
+  }
+
+  function statLine(p) {
+    var st = p.stats, parts = [];
+    if (st.numbered) parts.push("<b>" + (st.min !== st.max ? st.min + "~" + st.max + "턴" : st.min + "턴") + "</b> · " + st.numbered + "개");
+    else if (st.seq) parts.push("<b>" + st.seq + "턴</b>");
+    if (st.intro) parts.push("시작 메시지 포함");
+    parts.push(st.blocks + "블록");
+    parts.push(C.fmtNum(st.chars) + "자");
+    if (p.date) parts.push(esc(p.date));
+    return parts.join(" · ");
+  }
+
+  /* 자동 분류 결과 → 카드의 「저장 방법」 선택지 */
+  function methodOptions(it) {
+    var a = it.analysis, opts = [];
+    if (a && a.doc) {
+      var t = a.doc.meta.title || a.doc.id, k = a.cls.at;
+      if (a.cls.kind === "branch" || a.cls.kind === "regen" || a.cls.kind === "edits") {
+        opts.push({ v: "branch", label: (k || "?") + "턴부터 「" + t + "」의 분기로 저장 (앞부분은 원본을 참조)" });
+      }
+      opts.push({ v: "append_keep", label: "「" + t + "」에 새 턴만 이어붙이기 (내용이 다른 턴은 기존 유지)" });
+      opts.push({ v: "append_replace", label: "「" + t + "」에 이어붙이고, 내용이 다른 턴은 파일 내용으로 바꾸기" });
+    }
+    opts.push({ v: "new", label: "완전히 새 기록으로 저장 (전체 턴 따로 저장)" });
+    return opts;
+  }
+  function defaultMethod(it) {
+    var a = it.analysis;
+    if (!a || !a.doc) return "new";
+    if (a.cls.kind === "branch") return "branch";
+    if (a.cls.kind === "regen") return "append_replace";
+    return "append_keep";                       // append · same · edits
+  }
+  function analysisNote(it) {
+    var a = it.analysis;
+    if (!a || !a.doc) return "";
+    var t = esc(a.doc.meta.title || a.doc.id), c = a.cls, pre = c.prefix ? "1~" + c.prefix + "턴" : "";
+    var msg;
+    if (c.kind === "branch") msg = pre + "은 「" + t + "」와 같고, <b>" + c.at + "턴부터 내용이 달라요</b>. 분기로 저장하면 " + c.at + "턴부터만 따로 저장돼요.";
+    else if (c.kind === "regen") msg = pre + "은 「" + t + "」와 같고, 마지막 " + c.at + "턴만 달라요. 답변을 다시 뽑은 것으로 보고 그 턴을 파일 내용으로 바꿔요. 갈래를 남기고 싶으면 분기로 저장하세요.";
+    else if (c.kind === "edits") msg = "「" + t + "」와 같은 턴·다른 턴이 섞여 있어요(중간 수정). 기본은 새 턴만 이어붙이고 다른 턴은 기존 것을 둬요.";
+    else if (c.kind === "same") msg = "「" + t + "」와 내용이 전부 같아요. 저장해도 바뀌는 건 없어요.";
+    else if (a.byTitle) msg = "겹치는 내용은 없지만 제목이 같은 「" + t + "」이 있어 그 기록에 이어붙여요.";
+    else msg = pre + "은 「" + t + "」와 같아요. 새 턴만 이어붙입니다.";
+    return '<div class="notice" style="margin:0 0 12px">' + msg + "</div>";
+  }
+
+  function cardHtml(it) {
+    var p = it.parsed, k = it.key;
+    var hud = p.hasHud
+      ? '<label class="chk" style="margin:0 0 10px"><input type="checkbox" class="imp-hud"> 상태창(&lt;StatsHUD&gt;) 블록은 빼고 저장</label>'
+      : "";
+    var a = it.analysis;
+    var targetSel = '<select class="imp-target"><option value="">새 기록으로 저장</option>' + targetOptions() + "</select>";
+    var methods = methodOptions(it), def = defaultMethod(it);
+    var methodSel = '<select class="imp-method">' + methods.map(function (o) {
+      return '<option value="' + o.v + '"' + (o.v === def ? " selected" : "") + ">" + esc(o.label) + "</option>";
+    }).join("") + "</select>";
+    return '<div class="cap imp-card" data-k="' + k + '">' +
+      '<div class="cap-head"><span class="cap-no"><span class="fname" title="' + esc(p.filename) + '">' + esc(p.filename) + "</span>" +
+      '<span class="badge">' + esc(p.formatLabel) + "</span></span>" +
+      '<button class="cap-del imp-del" type="button" title="목록에서 빼기">×</button></div>' +
+      '<div class="imp-stat">' + statLine(p) + "</div>" +
+      analysisNote(it) +
+      '<div class="field"><label>저장 방법</label>' + methodSel + '<div class="hint imp-target-hint"></div></div>' +
+      '<div class="field imp-target-wrap" style="display:none"><label>기준 기록</label>' + targetSel + "</div>" +
+      '<div class="grid2">' +
+      '<div class="field"><label>제목</label><input type="text" class="imp-title" value="' + esc(p.title) + '"></div>' +
+      '<div class="field"><label>날짜</label><input type="date" class="imp-date" value="' + esc(p.date || todayISO()) + '"></div>' +
+      '<div class="field"><label>캐릭터 이름 (AI 응답)</label><input type="text" class="imp-character" value="' + esc(p.character) + '" placeholder="파일에서 못 찾았어요 — 직접 입력"></div>' +
+      '<div class="field"><label>내 이름 (내가 친 입력)</label><input type="text" class="imp-persona" value="' + esc(p.persona) + '" placeholder="비우면 「나」"></div>' +
+      '<div class="field"><label>폴더 (서가)</label><input type="text" class="imp-folder" list="imp-folder-list" value="' + esc(folderDefault || p.character || "") + '" placeholder="비우면 미분류"></div>' +
+      '<div class="field"><label>태그 (쉼표로 구분)</label><input type="text" class="imp-tags" value="" placeholder="예: 로판, 분기"></div>' +
+      "</div>" +
+      hud +
+      '<div class="imp-foot">' +
+      '<button class="btn small imp-pv" type="button">미리보기</button>' +
+      '<button class="btn small primary imp-save" type="button">저장</button>' +
+      '<span class="imp-msg"></span></div>' +
+      '<div class="imp-preview" style="display:none"></div>' +
+      "</div>";
+  }
+
+  function readCard(it) {
+    var el = it.el;
+    var hudEl = el.querySelector(".imp-hud");
+    var method = el.querySelector(".imp-method").value;
+    var target = method === "new" ? "" : el.querySelector(".imp-target").value;
+    var f = {
+      method: method,
+      title: el.querySelector(".imp-title").value.trim(),
+      date: el.querySelector(".imp-date").value.trim(),
+      character: el.querySelector(".imp-character").value.trim(),
+      persona: el.querySelector(".imp-persona").value.trim() || "나",
+      folder: el.querySelector(".imp-folder").value.trim(),
+      tags: el.querySelector(".imp-tags").value,
+      target: target,
+      stripHud: !!(hudEl && hudEl.checked),
+      conflict: method === "append_replace" ? "replace" : "keep",
+    };
+    if (target) {
+      var d = S.index.get(target);
+      if (d) {
+        f.character = (d.meta.character || "").trim();
+        f.persona = (d.meta.persona || "").trim() || "나";
+      }
+    }
+    return f;
+  }
+
+  /* 화면용 계획 (저장 때는 GitHub 최신본으로 다시 계산) */
+  function planFor(it) {
+    var f = readCard(it);
+    var d = f.target ? S.index.get(f.target) : null;
+    if (!d) return null;
+    var turns = C.materializeImport(it.parsed, {
+      character: f.character || "캐릭터", persona: f.persona, startNo: 1, stripHud: f.stripHud,
+    });
+    var full = assembleFull(d);
+    var plan = C.planAppend(full, turns, { conflict: f.conflict, lockBelow: d.branchAt });
+    return { plan: plan, turns: turns, doc: d, cls: C.classifyPlan(C.planAppend(full, turns, { conflict: "keep", lockBelow: d.branchAt }), turns, turnMaxOf(full)) };
+  }
+
+  function refreshPlan(it) {
+    var el = it.el, hint = el.querySelector(".imp-target-hint");
+    var f = readCard(it);
+    var wrap = el.querySelector(".imp-target-wrap");
+    wrap.style.display = f.method === "new" ? "none" : "";
+    var r = planFor(it);
+    if (!r) { hint.textContent = f.method === "new" ? "" : "기준 기록을 골라주세요."; return; }
+    var st = it.parsed.stats;
+    if (f.method === "branch") {
+      var at = r.cls.at;
+      if (!at) { hint.textContent = "원본과 다른 턴이 없어서 분기로 저장할 수 없어요. 이어붙이기를 고르세요."; return; }
+      var n = r.turns.filter(function (t) { return t.no !== null && (t.seq ? t.no + r.plan.offset : t.no) >= at; }).length;
+      hint.textContent = at + "턴부터 " + n + "개 턴을 「" + (r.doc.meta.title || r.doc.id) + "」의 분기로 저장해요. 1~" + (at - 1) + "턴은 저장하지 않고 원본을 이어서 보여줍니다. 캐릭터·내 이름·폴더는 원본을 따라요.";
+      return;
+    }
+    var how = st.numbered
+      ? "파일의 턴 번호를 그대로 써요. "
+      : (r.plan.skipped.length || r.plan.extended.length
+        ? "파일의 턴이 기존 " + (1 + r.plan.offset) + "턴부터 이어지는 걸로 봤어요. "
+        : "이 파일엔 턴 번호가 없어서 기존 마지막 턴 다음부터 이어붙여요. ");
+    hint.textContent = how + C.describePlan(r.plan) + " 이름표는 그 기록의 캐릭터·내 이름을 따릅니다.";
+  }
+
+  function onMethodChange(it) {
+    var el = it.el, f = readCard(it);
+    var d = f.target ? S.index.get(f.target) : null;
+    var lockAll = ["imp-title", "imp-date", "imp-character", "imp-persona", "imp-folder", "imp-tags"];
+    var lockBranch = ["imp-character", "imp-persona", "imp-folder"];
+    var lock = (f.method === "new" || !d) ? [] : (f.method === "branch" ? lockBranch : lockAll);
+    lockAll.forEach(function (cls) {
+      var inp = el.querySelector("." + cls);
+      var locked = lock.indexOf(cls) >= 0;
+      if (locked) {
+        if (inp.dataset.own === undefined) inp.dataset.own = inp.value;
+        inp.readOnly = true;
+        var key = cls.replace("imp-", "");
+        inp.value = key === "folder" ? d.folder : (d.meta[key] || "");
+      } else {
+        inp.readOnly = false;
+        if (inp.dataset.own !== undefined) { inp.value = inp.dataset.own; delete inp.dataset.own; }
+      }
+    });
+    if (f.method === "branch" && d) {
+      var ti = el.querySelector(".imp-title");
+      var same = ti.value.trim() === (d.meta.title || "").trim();
+      var r = planFor(it);
+      if ((!ti.value.trim() || same) && r && r.cls.at) ti.value = (d.meta.title || "기록") + " · " + r.cls.at + "턴 분기";
+    }
+    refreshPlan(it);
+  }
+
+  function setMsg(it, text, isErr) {
+    var m = it.el.querySelector(".imp-msg");
+    if (!m) return;
+    m.textContent = text || "";
+    m.classList.toggle("err", !!isErr);
+  }
+
+  function preview(it) {
+    var pv = it.el.querySelector(".imp-preview");
+    if (pv.style.display !== "none") { pv.style.display = "none"; return; }
+    var f = readCard(it);
+    var turns, note = "";
+    if (f.target) {
+      var r = planFor(it);
+      if (f.method === "branch" && r && r.cls.at) {
+        var at = r.cls.at;
+        turns = r.turns.filter(function (t) { return t.no !== null && (t.seq ? t.no + r.plan.offset : t.no) >= at; })
+          .map(function (t) { return { no: t.seq ? t.no + r.plan.offset : t.no, label: null, blocks: t.blocks }; });
+        note = at + "턴부터 분기로 저장되는 부분이에요.";
+      } else {
+        turns = r ? r.plan.addedTurns : [];
+        note = r ? C.describePlan(r.plan) : "";
+      }
+    } else {
+      turns = C.materializeImport(it.parsed, {
+        character: f.character || "캐릭터", persona: f.persona, startNo: 1, stripHud: f.stripHud,
+      });
+    }
+    var slice = turns.slice(0, PREVIEW_TURNS);
+    pv.innerHTML =
+      (note ? '<p class="pv-note" style="margin:0 0 8px">' + esc(note) + "</p>" : "") +
+      (slice.length
+        ? '<div class="reader">' + C.renderTurns(slice, f.persona, f.character || "캐릭터") + "</div>"
+        : '<p class="pv-note">새로 들어갈 턴이 없어요.</p>') +
+      (turns.length > PREVIEW_TURNS
+        ? '<p class="pv-note">앞 ' + PREVIEW_TURNS + "개만 보여드려요 (전체 " + turns.length + "개). 저장한 뒤 편집 화면에서 언제든 고칠 수 있어요.</p>"
+        : "");
+    pv.style.display = "";
+  }
+
+  function setBusy(it, on) {
+    it.el.querySelectorAll("button, input, select").forEach(function (b) { b.disabled = on; });
+  }
+
+  function doneLine(it, text, id) {
+    it.saved = true; it.id = id;
+    it.el.classList.add("saved");
+    it.el.querySelector(".imp-foot").innerHTML =
+      '<span class="ok">✓ ' + esc(text) + "</span>" +
+      '<a class="btn small" href="#/view?id=' + encodeURIComponent(id) + '">열기</a>';
+    it.el.querySelector(".imp-preview").style.display = "none";
+  }
+
+  async function saveItem(it) {
+    if (it.saved) return true;
+    var f = readCard(it);
+    var p = it.parsed;
+    if (f.method !== "new" && !f.target) { setMsg(it, "기준 기록을 골라주세요.", true); return false; }
+    if (f.method === "new" || f.method === "branch") {
+      if (!f.title) { setMsg(it, "제목을 입력해 주세요.", true); return false; }
+    }
+    if (f.method === "new" && !f.character && p.stats.chars_ > 0) {
+      setMsg(it, "캐릭터 이름을 입력해 주세요. 저장할 때 이름표에 필요해요.", true); return false;
+    }
+    setBusy(it, true);
+    setMsg(it, "저장 중…");
+    try {
+      if (f.method === "branch") {
+        var br = await saveImportedBranch(f.target, p, { stripHud: f.stripHud, title: f.title, date: f.date, tags: f.tags });
+        doneLine(it, br.at + "턴부터 분기로 저장했어요 (" + br.count + "개 턴)", br.id);
+      } else if (f.target) {
+        var res = await saveImportedAppend(f.target, p, { stripHud: f.stripHud, conflict: f.conflict });
+        var pl = res.plan;
+        if (!res.wrote) {
+          doneLine(it, "새 턴이 없어요 — 이미 전부 저장돼 있어요" +
+            (pl.conflicts.length ? " (내용이 다른 " + pl.conflicts.length + "개 턴은 기존 것을 유지)" : ""), res.id);
+        } else {
+          var bits = [];
+          if (pl.added.length) bits.push("새 턴 " + pl.added.length + "개");
+          if (pl.extended.length) bits.push(pl.extended.length + "개 보강");
+          if (pl.replaced.length) bits.push(pl.replaced.length + "개 교체");
+          if (pl.introAdded) bits.push("시작 메시지");
+          var skip = pl.skipped.length ? " · 이미 있던 " + pl.skipped.length + "개 턴은 건너뜀" : "";
+          doneLine(it, bits.join(", ") + " 이어붙였어요" + skip, res.id);
+        }
+      } else {
+        var turns = C.materializeImport(p, {
+          character: f.character, persona: f.persona, startNo: 1, stripHud: f.stripHud,
+        });
+        var id = await saveImportedNew({
+          title: f.title, character: f.character, persona: f.persona, date: f.date,
+          folder: f.folder, tags: f.tags, source: "file:" + p.format,
+        }, turns);
+        doneLine(it, "저장했어요", id);
+      }
+      return true;
+    } catch (e) {
+      setBusy(it, false);
+      setMsg(it, friendlyErr(e), true);
+      return false;
+    }
+  }
+
+  function unsaved() { return IMP.items.filter(function (it) { return !it.saved; }); }
+  function updateActions() {
+    var n = unsaved().length;
+    $("imp-actions").style.display = IMP.items.length ? "" : "none";
+    $("imp-saveall").disabled = !n || IMP.busy;
+    $("imp-saveall").textContent = n > 1 ? "모두 저장 (" + n + "개)" : "모두 저장";
+  }
+
+  async function saveAll() {
+    if (IMP.busy) return;
+    IMP.busy = true; updateActions();
+    var todo = unsaved(), ok = 0, fail = 0;
+    for (var i = 0; i < todo.length; i++) {
+      $("imp-msg").textContent = (i + 1) + "/" + todo.length + " 저장 중…";
+      if (await saveItem(todo[i])) ok++; else fail++;
+    }
+    IMP.busy = false; updateActions();
+    $("imp-msg").textContent = ok + "개 저장" + (fail ? " · " + fail + "개는 실패했어요 (각 카드의 안내를 확인해 주세요)" : "했어요.");
+  }
+
+  function addCard(parsed) {
+    var it = { key: ++IMP.seq, parsed: parsed, saved: false, id: null, el: null, analysis: analyzeUpload(parsed, false) };
+    var wrap = document.createElement("div");
+    wrap.innerHTML = cardHtml(it);
+    it.el = wrap.firstElementChild;
+    list.appendChild(it.el);
+    IMP.items.push(it);
+    if (it.analysis && it.analysis.doc) it.el.querySelector(".imp-target").value = it.analysis.doc.id;
+    it.el.querySelector(".imp-method").addEventListener("change", function () { onMethodChange(it); });
+    it.el.querySelector(".imp-target").addEventListener("change", function () { onMethodChange(it); });
+    var hudEl = it.el.querySelector(".imp-hud");
+    if (hudEl) hudEl.addEventListener("change", function () { refreshPlan(it); });
+    it.el.querySelector(".imp-pv").addEventListener("click", function () { preview(it); });
+    it.el.querySelector(".imp-save").addEventListener("click", function () { saveItem(it).then(updateActions); });
+    it.el.querySelector(".imp-del").addEventListener("click", function () {
+      IMP.items = IMP.items.filter(function (x) { return x !== it; });
+      it.el.remove();
+      updateActions();
+    });
+    onMethodChange(it);
+    return it;
+  }
+
+  function addErrorCard(name, why) {
+    var div = document.createElement("div");
+    div.className = "cap imp-card";
+    div.innerHTML = '<div class="cap-head"><span class="cap-no"><span class="fname">' + esc(name) + "</span>" +
+      '<span class="badge warn">읽지 못함</span></span>' +
+      '<button class="cap-del" type="button" title="목록에서 빼기">×</button></div>' +
+      '<div class="imp-stat">' + esc(why) + "</div>";
+    div.querySelector(".cap-del").addEventListener("click", function () { div.remove(); });
+    list.appendChild(div);
+  }
+
+  async function handleFiles(files) {
+    var arr = Array.from(files || []);
+    if (!arr.length) return;
+    $("imp-msg").textContent = "";
+    for (var i = 0; i < arr.length; i++) {
+      var file = arr[i];
+      try {
+        var text = await readFileText(file);
+        if (!text.trim()) { addErrorCard(file.name, "빈 파일이에요."); continue; }
+        var parsed = C.parseImportText(text, file.name);
+        if (!parsed.turns.length) { addErrorCard(file.name, "대화를 찾지 못했어요. 지원하는 세 형식인지 확인해 주세요."); continue; }
+        addCard(parsed);
+      } catch (e) {
+        addErrorCard(file.name, "읽지 못했어요: " + ((e && e.message) || e));
+      }
+    }
+    input.value = "";
+    updateActions();
+    if ($("imp-auto").checked && unsaved().length) saveAll();
+  }
+  IMP.onFiles = handleFiles;
+
+  /* 드롭존 */
+  drop.addEventListener("click", function () { input.click(); });
+  drop.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+  input.addEventListener("change", function () { handleFiles(input.files); });
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation(); drop.classList.add("over"); });
+  });
+  ["dragleave", "dragend"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    e.preventDefault(); e.stopPropagation(); drop.classList.remove("over");
+    handleFiles(e.dataTransfer && e.dataTransfer.files);
+  });
+
+  $("imp-auto").addEventListener("change", function () {
+    try { localStorage.setItem(LS_IMP_AUTO, this.checked ? "1" : "0"); } catch (e) {}
+  });
+  $("imp-saveall").addEventListener("click", saveAll);
+
+  /* 폴더 자동완성 목록 (카드마다 공유) */
+  var dl = document.createElement("datalist");
+  dl.id = "imp-folder-list";
+  dl.innerHTML = C.allFolders(S.index).map(function (kv) { return '<option value="' + esc(kv[0]) + '">'; }).join("");
+  list.appendChild(dl);
+}
+
 /* ---------------- 페이지: 편집 ---------------- */
 function pageEdit(params) {
   var id = params.get("id") || "";
@@ -1921,7 +3123,11 @@ function pageEdit(params) {
     }
   });
   $("btn-del").addEventListener("click", async function () {
-    if (!confirm("이 기록을 완전히 삭제할까요? 되돌릴 수 없어요.")) return;
+    var kids = childrenOf(d);
+    var warn = kids.length
+      ? "\n\n주의: 이 기록에서 갈라진 분기 " + kids.length + "개가 앞부분을 여기서 가져와요. 삭제하면 분기는 갈라진 턴부터만 남습니다."
+      : "";
+    if (!confirm("이 기록을 완전히 삭제할까요? 되돌릴 수 없어요." + warn)) return;
     $("btn-del").disabled = true;
     $("msg").textContent = "삭제 중…";
     try {
@@ -2049,6 +3255,7 @@ function render() {
   if (r.path === "/" || r.path === "") { syncIndex(false); pageList(r.params); }
   else if (r.path === "/view") { syncIndex(false); pageView(r.params); }
   else if (r.path === "/new") { syncIndex(false); pageNew(r.params); }
+  else if (r.path === "/import") { syncIndex(false); pageImport(r.params); }
   else if (r.path === "/edit") { syncIndex(false); pageEdit(r.params); }
   else if (r.path === "/settings") { pageSettings(false); }
   else { pageList(new URLSearchParams()); }
@@ -2058,6 +3265,15 @@ window.addEventListener("hashchange", render);
 document.addEventListener("DOMContentLoaded", function () {
   $("theme-btn").addEventListener("click", toggleTheme);
   setThemeIcon();
+  /* 파일 백업 화면에서는 페이지 어디에 떨어뜨려도 받아주고, 브라우저가 파일을 열어버리지 않게 막는다 */
+  document.addEventListener("dragover", function (e) { if ($("imp-drop")) e.preventDefault(); });
+  document.addEventListener("drop", function (e) {
+    var zone = $("imp-drop");
+    if (!zone) return;
+    e.preventDefault();
+    zone.classList.remove("over");
+    if (IMP.onFiles && e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) IMP.onFiles(e.dataTransfer.files);
+  });
   if (cfgOk()) hydrateFromCache();
   render();
 });
