@@ -250,6 +250,16 @@ hr.endmark{border:none;height:1px;margin:60px auto 0;max-width:200px;
 .doc.sub .submeta{color:var(--faint);font-size:12.5px;margin-left:auto}
 .fold.branch{border-style:dashed;color:var(--dim)}
 .reader-head .meta u{text-decoration:none;color:var(--gold)}
+/* ---- 목록(서가 안)에서 바로 삭제 ---- */
+.docrow{position:relative}
+.docrow.has-del>.doc h3{padding-right:56px}
+.docrow.sub.has-del>.doc{padding-right:56px}
+.doc-del{position:absolute;top:12px;right:12px;border:1px solid transparent;background:none;
+  color:var(--faint);cursor:pointer;font-family:inherit;font-size:12px;line-height:1.4;
+  padding:3px 8px;border-radius:6px;white-space:nowrap}
+.doc-del:hover{color:var(--danger);border-color:#5a3b46;background:var(--panel2)}
+.doc-del[disabled]{opacity:.55;cursor:default;color:var(--faint);border-color:transparent;background:none}
+.docrow.sub .doc-del{top:7px;right:10px}
 
 </style>
 </head>
@@ -1894,6 +1904,16 @@ async function deleteDoc(id) {
   removeLocal(id);
 }
 
+/* 삭제 확인창 — 편집 화면과 목록 화면이 같이 씀. withTitle이면 어떤 기록인지 제목을 함께 보여준다. */
+function confirmDelete(d, withTitle) {
+  var kids = childrenOf(d);
+  var warn = kids.length
+    ? "\n\n주의: 이 기록에서 갈라진 분기 " + kids.length + "개가 앞부분을 여기서 가져와요. 삭제하면 분기는 갈라진 턴부터만 남습니다."
+    : "";
+  var head = withTitle ? "「" + (d.meta.title || d.id) + "」 기록을" : "이 기록을";
+  return confirm(head + " 완전히 삭제할까요? 되돌릴 수 없어요." + warn);
+}
+
 /* ---------------- 라우터 / 레이아웃 ---------------- */
 function parseRoute() {
   var h = location.hash || "#/";
@@ -1979,14 +1999,26 @@ function pageList(params) {
   C.allTags(scoped).forEach(function (kv) { chips.push(chip("#" + kv[0], "tag", kv[0], tag, kv[1])); });
   var chipsHtml = chips.length ? '<div class="chips">' + chips.join("") + "</div>" : "";
 
+  /* 서가(폴더) 안에서는 목록에서 바로 삭제할 수 있게 각 행에 버튼을 붙인다.
+     <a> 안에 <button>을 넣으면 링크 이동이 같이 일어나므로 .docrow 래퍼 옆에 따로 둔다. */
+  var showDel = inFolder;
+  function delBtn(id) {
+    return showDel
+      ? '<button class="doc-del" type="button" data-id="' + esc(id) + '" title="이 기록 삭제">삭제</button>'
+      : "";
+  }
+  var rowCls = "docrow" + (showDel ? " has-del" : "");
+
   function branchRows(d, depth) {
     var kids = childrenOf(d);
     if (!kids.length) return "";
     return kids.map(function (k) {
-      return '<a class="doc sub" style="margin-left:' + (18 * depth) + 'px" href="#/view?id=' + encodeURIComponent(k.id) + "&t=" + k.branchAt + '">' +
+      return '<div class="' + rowCls + ' sub" style="margin-left:' + (18 * depth) + 'px">' +
+        '<a class="doc sub" href="#/view?id=' + encodeURIComponent(k.id) + "&t=" + k.branchAt + '">' +
         '<span class="arrow">↳</span> <b>' + k.branchAt + "턴부터</b> " + esc(k.meta.title || k.id) +
         '<span class="submeta">' + (k.turn_max !== null ? "~" + k.turn_max + "턴 · " : "") + k.n_turns + "개 · " + C.fmtNum(k.chars) + "자" +
-        (k.meta.date ? " · " + esc(k.meta.date) : "") + "</span></a>" + branchRows(k, depth + 1);
+        (k.meta.date ? " · " + esc(k.meta.date) : "") + "</span></a>" + delBtn(k.id) + "</div>" +
+        branchRows(k, depth + 1);
     }).join("");
   }
   function docRow(row, showFolder) {
@@ -1996,10 +2028,12 @@ function pageList(params) {
     var fb = (showFolder && d.folder) ? '<span class="fold">' + esc(d.folder) + "</span>" : "";
     var parent = parentOf(d);
     var pb = parent ? '<span class="fold branch">↳ 「' + esc(parent.meta.title || parent.id) + "」 " + d.branchAt + "턴 분기</span>" : "";
-    return '<a class="doc" href="#/view?id=' + encodeURIComponent(row.id) + (parent ? "&t=" + d.branchAt : "") + '">' +
+    return '<div class="' + rowCls + '">' +
+      '<a class="doc" href="#/view?id=' + encodeURIComponent(row.id) + (parent ? "&t=" + d.branchAt : "") + '">' +
       "<h3>" + esc(title) + "</h3>" +
       '<div class="meta">' + fb + pb + C.metaLine(meta, d) + "</div>" +
-      '<div class="snip">' + snip + "</div></a>" + branchRows(d, 1);
+      '<div class="snip">' + snip + "</div></a>" + delBtn(row.id) + "</div>" +
+      branchRows(d, 1);
   }
 
   var parts = [];
@@ -2083,6 +2117,26 @@ function pageList(params) {
     go("/" + qs({ q: $("search-q").value, who: who, tag: tag, folder: folder }));
   });
   $("btn-sync").addEventListener("click", function () { syncIndex(true); render(); });
+  Array.prototype.forEach.call(document.querySelectorAll(".doc-del"), function (btn) {
+    btn.addEventListener("click", async function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      var id = btn.getAttribute("data-id");
+      var d = S.index.get(id);
+      if (!d) return;
+      if (!confirmDelete(d, true)) return;
+      btn.disabled = true;
+      btn.textContent = "삭제 중…";
+      try {
+        await deleteDoc(id);
+        render();
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = "삭제";
+        alert("삭제하지 못했어요.\n" + friendlyErr(e));
+      }
+    });
+  });
   $("btn-backup").addEventListener("click", function () {
     var enc = new TextEncoder();
     var files = [];
@@ -3123,11 +3177,7 @@ function pageEdit(params) {
     }
   });
   $("btn-del").addEventListener("click", async function () {
-    var kids = childrenOf(d);
-    var warn = kids.length
-      ? "\n\n주의: 이 기록에서 갈라진 분기 " + kids.length + "개가 앞부분을 여기서 가져와요. 삭제하면 분기는 갈라진 턴부터만 남습니다."
-      : "";
-    if (!confirm("이 기록을 완전히 삭제할까요? 되돌릴 수 없어요." + warn)) return;
+    if (!confirmDelete(d, false)) return;
     $("btn-del").disabled = true;
     $("msg").textContent = "삭제 중…";
     try {
