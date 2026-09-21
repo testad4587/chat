@@ -346,7 +346,7 @@ body.gal-dragging,body.gal-dragging *{cursor:grabbing!important}
 </div>
 <script>
 /* ============================================================
-   채팅 서고 core — app.py의 파싱/직렬화/렌더링 로직 1:1 포팅
+   채팅 서고 core — 파싱/직렬화/렌더링 로직
    (브라우저 전역 + node 테스트용 module.exports 겸용)
    ============================================================ */
 (function (root) {
@@ -356,7 +356,7 @@ var APP_NAME = "채팅 서고";
 var META_KEYS = ["title", "character", "persona", "date", "tags", "source", "branch_of", "branch_at"];
 var PAGE_TURNS = 50;
 
-/* ---------------- 정규식 (app.py와 동일) ---------------- */
+/* ---------------- 정규식 ---------------- */
 var TURN_RE = /^\s*(\d{1,5})\s*턴\s*[.:]?\s*$/;
 var MD_TURN_RE = /^##\s+(?:(\d{1,5})\s*턴|(.+?))\s*$/;
 var MD_LABEL_RE = /^\*\*([^*\n]{1,24})\s*[:：]\*\*\s*(.*)$/;
@@ -371,7 +371,7 @@ function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\\-]/g, "\\$&"); }
 
 function rstrip(s) { return s.replace(/\s+$/, ""); }
 
-/* html.escape(quote=True)와 동일한 이스케이프 */
+/* HTML 이스케이프 (따옴표 포함) */
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -517,18 +517,34 @@ function parseBody(body, names) {
     }
   }
 
+  /* 본문 속 "## [지침 보강]"·"**HP:** 30" 같은 줄이 턴/화자 구분으로 오해돼
+     턴이 잘려 나가지 않도록, 제목과 이름표를 아래처럼 가려서 읽는다.
+     - "## N턴"          : 언제나 턴 제목
+     - "## 라벨"(번호 없음): 첫 번호 턴이 나오기 전에만 제목 (저장할 때 번호 없는 턴은 늘 맨 앞에 둔다).
+                           번호 턴 안에 있으면 본문. 문단 중간에 낀 것도 본문.
+     - "**이름:**"        : 캐릭터/페르소나 이름이면 언제나 이름표. 그 밖의 이름은
+                           문단 첫 줄(빈 줄·제목 바로 다음)일 때만 이름표. */
+  var known = {};
+  (names || []).forEach(function (n) { n = String(n || "").trim(); if (n) known[n] = 1; });
+  var seenNumbered = false;
+  var prev = "blank";                       // 바로 앞 줄: blank | head | text
+
   String(body).replace(/\r\n/g, "\n").split("\n").forEach(function (raw) {
     var line = rstrip(raw);
     var hm = MD_TURN_RE.exec(line);
+    if (hm && !hm[1] && (seenNumbered || prev === "text")) hm = null;
     if (hm) {
       closePara(curBlock, para);
       curBlock = null;
-      if (hm[1]) curTurn = newTurn(parseInt(hm[1], 10));
+      if (hm[1]) { curTurn = newTurn(parseInt(hm[1], 10)); seenNumbered = true; }
       else curTurn = newTurn(null, hm[2]);
       turns.push(curTurn);
+      prev = "head";
       return;
     }
     var lm = MD_LABEL_RE.exec(line);
+    if (lm && !known[lm[1].trim()] && prev === "text") lm = null;
+    prev = line.trim() ? "text" : "blank";
     if (lm) {
       closePara(curBlock, para);
       ensureTurn();
@@ -590,6 +606,12 @@ function parseFrontmatter(text) {
   return [meta, body];
 }
 
+/* 본문 줄이 "## …" 나 "**이름:**" 으로 시작하면 다시 읽을 때 턴/화자 구분으로 오해되므로
+   보이지 않는 문자(U+200B)를 앞에 붙인다. 이미 붙어 있으면 그대로(여러 번 저장해도 안전). */
+function guardLine(l) {
+  return (/^##\s/.test(l) || MD_LABEL_RE.test(l)) ? "\u200B" + l : l;
+}
+
 function serializeDoc(meta, turns) {
   var out = ["---"];
   META_KEYS.forEach(function (k) {
@@ -610,20 +632,20 @@ function serializeDoc(meta, turns) {
         rest = paras.slice(1);
         var firstLines = first.split("\n");
         out.push("**" + b.speaker + ":** " + firstLines[0]);
-        firstLines.slice(1).forEach(function (l) { out.push(l); });
+        firstLines.slice(1).forEach(function (l) { out.push(guardLine(l)); });
       } else if (b.speaker) {
         out.push("**" + b.speaker + ":**");
         rest = [];
       } else {
         rest = paras;
         if (rest.length) {
-          rest[0].split("\n").forEach(function (l) { out.push(l); });
+          rest[0].split("\n").forEach(function (l) { out.push(guardLine(l)); });
           rest = rest.slice(1);
         }
       }
       rest.forEach(function (p) {
         out.push("");
-        p.split("\n").forEach(function (l) { out.push(l); });
+        p.split("\n").forEach(function (l) { out.push(guardLine(l)); });
       });
       out.push("");
     });
@@ -937,9 +959,7 @@ function linesToParas(lines) {
 /* 본문 줄이 "## …" 나 "**이름:**" 으로 시작하면 저장 후 다시 읽을 때 턴/화자 구분으로
    오해되므로, 보이지 않는 문자(U+200B)를 앞에 붙여 지켜준다. */
 function guardPara(p) {
-  return p.split("\n").map(function (l) {
-    return (/^##\s/.test(l) || MD_LABEL_RE.test(l)) ? ZWSP + l : l;
-  }).join("\n");
+  return p.split("\n").map(guardLine).join("\n");
 }
 
 function isoDateFrom(m) {
