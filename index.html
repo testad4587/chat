@@ -165,6 +165,26 @@ mark.hl.cur{background:var(--gold);color:var(--primary-ink)}
 .backline{margin:26px 0 0}
 hr.endmark{border:none;height:1px;margin:60px auto 0;max-width:200px;
   background:linear-gradient(90deg,transparent,var(--gold-dim),transparent)}
+/* ---- 읽기 화면: 맨 위로 / 맨 아래로 (오른쪽 아래에 떠 있는 버튼) ---- */
+.scrollnav{position:fixed;z-index:15;right:max(14px,calc(50vw - 486px));bottom:18px;
+  display:flex;flex-direction:column;border:1px solid var(--line2);border-radius:12px;overflow:hidden;
+  background:color-mix(in srgb,var(--panel) 88%,transparent);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  box-shadow:0 4px 18px rgba(0,0,0,.3)}
+.scrollnav[hidden]{display:none}
+.findbar + .scrollnav{bottom:68px}
+html[data-theme="light"] .scrollnav{box-shadow:0 2px 10px rgba(58,47,82,.13)}
+.scrollnav button{width:42px;height:42px;padding:0;border:none;background:none;color:var(--dim);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:transparent;transition:color .15s,background .15s,opacity .15s}
+.scrollnav button + button{border-top:1px solid var(--line2)}
+.scrollnav button:focus-visible{outline:2px solid var(--gold);outline-offset:-3px;border-radius:10px}
+.scrollnav button:active{color:var(--gold-soft);background:var(--panel2)}
+@media(hover:hover){.scrollnav button:hover{color:var(--gold-soft);background:var(--panel2)}}
+.scrollnav button[disabled],.scrollnav button[disabled]:hover{opacity:.3;cursor:default;color:var(--dim);background:none}
+.scrollnav svg{display:block;pointer-events:none}
+@media(max-width:640px){.scrollnav{right:12px;bottom:14px}.scrollnav button{width:40px;height:40px}
+  .findbar + .scrollnav{bottom:64px}}
 
 /* ---- 새 기록 / 편집 ---- */
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;margin:20px 0}
@@ -2295,6 +2315,71 @@ function highlightMatches(rootEl, q, isCur) {
   });
 }
 
+/* ---------------- 읽기 화면: 맨 위로 / 맨 아래로 ----------------
+   긴 기록을 읽을 때 화면 오른쪽 아래에 떠 있는 버튼 두 개.
+   · 지금 보고 있는 쪽(50턴 묶음) 안에서 맨 위 / 맨 아래로 간다 — 쪽 넘김(← 이전 / 다음 →)이 바로 그 자리에 있다.
+   · 이미 끝에 닿아 있으면 그쪽 버튼은 흐려지고, 스크롤할 게 거의 없는 짧은 기록에서는 아예 숨는다.
+   · 화면을 다시 그릴 때마다 버튼 DOM이 새로 생기므로, 전역 리스너는 한 번만 걸고 그때그때 #scrollnav를 찾아 쓴다. */
+var SCROLLNAV_EDGE = 8;        // 끝에서 이만큼(px) 안쪽이면 "닿았다"고 본다
+var SCROLLNAV_BOUND = false, SCROLLNAV_RAF = 0;
+var SCROLLNAV_SVG = '<svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+var SCROLLNAV_HTML =
+  '<div class="scrollnav" id="scrollnav" role="group" aria-label="스크롤 이동" hidden>' +
+  '<button type="button" id="sn-top" title="맨 위로" aria-label="맨 위로">' + SCROLLNAV_SVG +
+  '<path d="M5 4h10M10 16V8M6 11.5l4-4 4 4"/></svg></button>' +
+  '<button type="button" id="sn-bottom" title="맨 아래로" aria-label="맨 아래로">' + SCROLLNAV_SVG +
+  '<path d="M5 16h10M10 4v8M6 8.5l4 4 4-4"/></svg></button></div>';
+
+function scrollDocHeight() {
+  var de = document.documentElement, b = document.body;
+  return Math.max(de.scrollHeight, b ? b.scrollHeight : 0);
+}
+/* 스크롤할 수 있는 최대 위치. 모바일은 주소창이 접히며 화면 높이가 변하므로 큰 쪽을 기준으로 잡는다
+   (= 바닥 판정이 살짝 일찍 나는 쪽. 반대로 잡으면 바닥에 닿아도 버튼이 안 흐려진다) */
+function scrollMaxY() {
+  var vh = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+  return Math.max(0, scrollDocHeight() - vh);
+}
+function scrollNavUpdate() {
+  SCROLLNAV_RAF = 0;
+  var nav = $("scrollnav");
+  if (!nav) return;
+  var max = scrollMaxY(), y = window.pageYOffset;
+  nav.hidden = max <= window.innerHeight / 2;
+  $("sn-top").disabled = y <= SCROLLNAV_EDGE;
+  $("sn-bottom").disabled = y >= max - SCROLLNAV_EDGE;
+}
+function scrollNavTick() {
+  if (SCROLLNAV_RAF || !$("scrollnav")) return;
+  SCROLLNAV_RAF = requestAnimationFrame(scrollNavUpdate);
+}
+function scrollNavGo(toBottom) {
+  var top = toBottom ? scrollDocHeight() : 0;
+  var dist = Math.abs((toBottom ? scrollMaxY() : 0) - window.pageYOffset);
+  /* 가까우면 부드럽게, 몇 화면 넘게 멀면(수십 턴 분량) 바로 점프 — 긴 본문을 훑으며 지나가면 버벅이고 오래 걸린다 */
+  var far = dist > window.innerHeight * 3;
+  var calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: top, left: 0, behavior: (far || calm) ? "auto" : "smooth" });
+}
+function scrollNavInit() {
+  var nav = $("scrollnav");
+  if (!nav) return;
+  $("sn-top").addEventListener("click", function () { scrollNavGo(false); });
+  $("sn-bottom").addEventListener("click", function () { scrollNavGo(true); });
+  /* 기록 내 검색 중이면 하단 찾기바 위로 올려 앉힌다 */
+  var fb = document.querySelector(".findbar");
+  if (fb && fb.offsetHeight) nav.style.bottom = (fb.offsetHeight + 14) + "px";
+  if (!SCROLLNAV_BOUND) {
+    SCROLLNAV_BOUND = true;
+    window.addEventListener("scroll", scrollNavTick, { passive: true });
+    window.addEventListener("resize", scrollNavTick);
+    /* 글꼴이 늦게 바뀌는 등 스크롤 없이 본문 높이만 달라질 때도 상태를 맞춘다 */
+    if (window.ResizeObserver) new ResizeObserver(scrollNavTick).observe($("app"));
+  }
+  scrollNavUpdate();
+}
+
 /* ---------------- 페이지: 읽기 ---------------- */
 function pageView(params) {
   var id = params.get("id") || "";
@@ -2454,7 +2539,8 @@ function pageView(params) {
     navHtml +
     '<hr class="endmark">' +
     '<p class="backline"><a class="btn small" href="#/">← 서재로</a></p></div>' +
-    findHtml;
+    findHtml +
+    SCROLLNAV_HTML;                          // 맨 위로 / 맨 아래로 (findbar 바로 뒤에 와야 CSS로 위치가 올라간다)
   layout(title, body, top);
 
   var jump = $("jump");
@@ -2543,6 +2629,9 @@ function pageView(params) {
   if (!scrolled && groups && curLocal >= 0 && curLocal < groups.length) {
     groups[curLocal].mark.scrollIntoView();
   }
+
+  /* 맨 위로 / 맨 아래로 — 위 스크롤 처리가 끝난 위치를 기준으로 버튼 상태를 맞춘다 */
+  scrollNavInit();
 }
 
 /* ---------------- 페이지: 새 기록 / 이어붙이기 ---------------- */
